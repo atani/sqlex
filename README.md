@@ -64,6 +64,9 @@ sqlex lint --require-alias query.sql
 # Preview changes
 sqlex fix --dry-run query.sql
 
+# Preview in unified diff format
+sqlex fix --dry-run -f diff query.sql
+
 # Apply fixes
 sqlex fix query.sql
 ```
