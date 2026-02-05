@@ -11,14 +11,12 @@ export const SqlexDemo: React.FC = () => {
     { text: "$ ", color: "green", bold: true },
   ];
 
-  // コマンド入力（フレーム 0-60）
-  const command = "sqlex check query.sql";
-  const commandEndFrame = 60;
-  const outputStartFrame = 75;
+  // === Phase 1: check コマンド ===
+  const checkCommand = "sqlex check query.sql";
+  const checkOutputStart = 70;
 
-  // 出力行（フレームごとにフェードイン）
-  const outputLines: { segments: TextSegment[]; delay: number }[] = [
-    // エラーヘッダー
+  // check 出力行
+  const checkOutputLines: { segments: TextSegment[]; delay: number }[] = [
     {
       segments: [
         { text: "✗ ", color: "red", bold: true },
@@ -28,9 +26,7 @@ export const SqlexDemo: React.FC = () => {
       ],
       delay: 0,
     },
-    // 空行
-    { segments: [{ text: "" }], delay: 5 },
-    // エラーメッセージ
+    { segments: [{ text: "" }], delay: 3 },
     {
       segments: [
         { text: "  Syntax error ", color: "red" },
@@ -38,28 +34,24 @@ export const SqlexDemo: React.FC = () => {
         { text: ": Expected expression, found: ", color: "white" },
         { text: "FROM", color: "cyan", bold: true },
       ],
-      delay: 10,
+      delay: 6,
     },
-    // ヒント
     {
       segments: [
         { text: "  💡 ", color: "yellow" },
         { text: "Line 3 may have a trailing comma that should be removed", color: "yellow" },
       ],
-      delay: 20,
+      delay: 12,
     },
-    // 空行
-    { segments: [{ text: "" }], delay: 25 },
-    // コード行 2
+    { segments: [{ text: "" }], delay: 15 },
     {
       segments: [
         { text: "  2 ", color: "gray" },
         { text: "│ ", color: "gray" },
         { text: "  name,", color: "white" },
       ],
-      delay: 30,
+      delay: 18,
     },
-    // コード行 3 (問題のある行)
     {
       segments: [
         { text: "  3 ", color: "yellow", bold: true },
@@ -67,9 +59,8 @@ export const SqlexDemo: React.FC = () => {
         { text: "  email,", color: "white" },
         { text: "  ← check here", color: "yellow" },
       ],
-      delay: 35,
+      delay: 21,
     },
-    // コード行 4 (エラー行)
     {
       segments: [
         { text: "  4 ", color: "red", bold: true },
@@ -77,9 +68,8 @@ export const SqlexDemo: React.FC = () => {
         { text: "FROM", color: "cyan", bold: true },
         { text: " users", color: "white" },
       ],
-      delay: 40,
+      delay: 24,
     },
-    // エラー位置マーカー
     {
       segments: [
         { text: "    ", color: "gray" },
@@ -87,20 +77,17 @@ export const SqlexDemo: React.FC = () => {
         { text: "     ", color: "white" },
         { text: "^", color: "red", bold: true },
       ],
-      delay: 45,
+      delay: 27,
     },
-    // コード行 5
     {
       segments: [
         { text: "  5 ", color: "gray" },
         { text: "│ ", color: "gray" },
         { text: "WHERE active = 1", color: "white" },
       ],
-      delay: 50,
+      delay: 30,
     },
-    // 空行
-    { segments: [{ text: "" }], delay: 55 },
-    // サマリー
+    { segments: [{ text: "" }], delay: 33 },
     {
       segments: [
         { text: "Total: ", color: "gray" },
@@ -109,7 +96,44 @@ export const SqlexDemo: React.FC = () => {
         { text: "1", color: "red", bold: true },
         { text: " error(s)", color: "gray" },
       ],
-      delay: 65,
+      delay: 36,
+    },
+  ];
+
+  // === Phase 2: fix コマンド ===
+  const fixCommandStart = 160;
+  const fixCommand = "sqlex fix query.sql";
+  const fixOutputStart = 220;
+
+  // fix 出力行
+  const fixOutputLines: { segments: TextSegment[]; delay: number }[] = [
+    {
+      segments: [
+        { text: "✓ ", color: "green", bold: true },
+        { text: "query.sql", color: "white", bold: true },
+        { text: " - ", color: "gray" },
+        { text: "1 fix(es) applied", color: "green" },
+      ],
+      delay: 0,
+    },
+    { segments: [{ text: "" }], delay: 5 },
+    {
+      segments: [
+        { text: "  Fixed: ", color: "green" },
+        { text: "Removed trailing comma on line 3", color: "white" },
+      ],
+      delay: 10,
+    },
+    { segments: [{ text: "" }], delay: 15 },
+    {
+      segments: [
+        { text: "Total: ", color: "gray" },
+        { text: "1", color: "white", bold: true },
+        { text: " file(s), ", color: "gray" },
+        { text: "1", color: "green", bold: true },
+        { text: " fix(es)", color: "gray" },
+      ],
+      delay: 20,
     },
   ];
 
@@ -123,22 +147,49 @@ export const SqlexDemo: React.FC = () => {
       }}
     >
       <Terminal>
-        {/* コマンド入力（タイピングアニメーション） */}
+        {/* Phase 1: check コマンド */}
         <TypingLine
-          text={command}
+          text={checkCommand}
           startFrame={0}
           typingSpeed={0.6}
           prefix={promptPrefix}
         />
 
-        {/* 出力行 */}
-        {frame >= outputStartFrame && (
+        {frame >= checkOutputStart && (
           <>
-            {outputLines.map((line, i) => (
+            {checkOutputLines.map((line, i) => (
               <TerminalLine
-                key={i}
+                key={`check-${i}`}
                 segments={line.segments}
-                showAtFrame={outputStartFrame + line.delay}
+                showAtFrame={checkOutputStart + line.delay}
+              />
+            ))}
+          </>
+        )}
+
+        {/* Phase 2: fix コマンド */}
+        {frame >= fixCommandStart && (
+          <>
+            <TerminalLine
+              segments={[{ text: "" }]}
+              showAtFrame={fixCommandStart}
+            />
+            <TypingLine
+              text={fixCommand}
+              startFrame={fixCommandStart + 5}
+              typingSpeed={0.6}
+              prefix={promptPrefix}
+            />
+          </>
+        )}
+
+        {frame >= fixOutputStart && (
+          <>
+            {fixOutputLines.map((line, i) => (
+              <TerminalLine
+                key={`fix-${i}`}
+                segments={line.segments}
+                showAtFrame={fixOutputStart + line.delay}
               />
             ))}
           </>

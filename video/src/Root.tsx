@@ -7,7 +7,7 @@ export const RemotionRoot: React.FC = () => {
       <Composition
         id="SqlexDemo"
         component={SqlexDemo}
-        durationInFrames={180}
+        durationInFrames={300}
         fps={30}
         width={800}
         height={500}
