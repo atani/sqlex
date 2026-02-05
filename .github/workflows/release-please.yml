@@ -73,12 +73,15 @@ jobs:
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
+      - name: Rename binary
+        run: |
+          cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} ${{ matrix.asset_name }}
+
       - name: Upload Release Asset
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          gh release upload ${{ needs.release-please.outputs.tag_name }} \
-            target/${{ matrix.target }}/release/${{ matrix.artifact_name }}#${{ matrix.asset_name }}
+          gh release upload ${{ needs.release-please.outputs.tag_name }} ${{ matrix.asset_name }}
 
   publish-homebrew:
     name: Update Homebrew Formula
