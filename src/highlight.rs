@@ -81,6 +81,7 @@ impl SourceHighlighter {
     }
 
     /// Display source code with highlighted error location (backward compatible)
+    #[allow(dead_code)]
     pub fn display_error(source: &str, line: usize, column: usize, context_lines: usize) -> String {
         Self::display_error_with_hint(source, line, column, None, context_lines)
     }
