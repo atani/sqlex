@@ -2,6 +2,8 @@
 
 A fast SQL syntax checker and linter written in Rust.
 
+![Demo](./demo.gif)
+
 ## Features
 
 - **Syntax Checking**: Validates SQL syntax with detailed error messages, source highlighting, and helpful hints
