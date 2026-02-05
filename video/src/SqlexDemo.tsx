@@ -11,11 +11,10 @@ export const SqlexDemo: React.FC = () => {
     { text: "$ ", color: "green", bold: true },
   ];
 
-  // === Phase 1: check コマンド ===
+  // === Phase 1: check コマンド（エラー） ===
   const checkCommand = "sqlex check query.sql";
-  const checkOutputStart = 70;
+  const checkOutputStart = 55;
 
-  // check 出力行
   const checkOutputLines: { segments: TextSegment[]; delay: number }[] = [
     {
       segments: [
@@ -26,7 +25,7 @@ export const SqlexDemo: React.FC = () => {
       ],
       delay: 0,
     },
-    { segments: [{ text: "" }], delay: 3 },
+    { segments: [{ text: "" }], delay: 2 },
     {
       segments: [
         { text: "  Syntax error ", color: "red" },
@@ -34,23 +33,23 @@ export const SqlexDemo: React.FC = () => {
         { text: ": Expected expression, found: ", color: "white" },
         { text: "FROM", color: "cyan", bold: true },
       ],
-      delay: 6,
+      delay: 4,
     },
     {
       segments: [
         { text: "  💡 ", color: "yellow" },
         { text: "Line 3 may have a trailing comma that should be removed", color: "yellow" },
       ],
-      delay: 12,
+      delay: 8,
     },
-    { segments: [{ text: "" }], delay: 15 },
+    { segments: [{ text: "" }], delay: 10 },
     {
       segments: [
         { text: "  2 ", color: "gray" },
         { text: "│ ", color: "gray" },
         { text: "  name,", color: "white" },
       ],
-      delay: 18,
+      delay: 12,
     },
     {
       segments: [
@@ -59,7 +58,7 @@ export const SqlexDemo: React.FC = () => {
         { text: "  email,", color: "white" },
         { text: "  ← check here", color: "yellow" },
       ],
-      delay: 21,
+      delay: 14,
     },
     {
       segments: [
@@ -68,7 +67,7 @@ export const SqlexDemo: React.FC = () => {
         { text: "FROM", color: "cyan", bold: true },
         { text: " users", color: "white" },
       ],
-      delay: 24,
+      delay: 16,
     },
     {
       segments: [
@@ -77,7 +76,7 @@ export const SqlexDemo: React.FC = () => {
         { text: "     ", color: "white" },
         { text: "^", color: "red", bold: true },
       ],
-      delay: 27,
+      delay: 18,
     },
     {
       segments: [
@@ -85,9 +84,9 @@ export const SqlexDemo: React.FC = () => {
         { text: "│ ", color: "gray" },
         { text: "WHERE active = 1", color: "white" },
       ],
-      delay: 30,
+      delay: 20,
     },
-    { segments: [{ text: "" }], delay: 33 },
+    { segments: [{ text: "" }], delay: 22 },
     {
       segments: [
         { text: "Total: ", color: "gray" },
@@ -96,16 +95,15 @@ export const SqlexDemo: React.FC = () => {
         { text: "1", color: "red", bold: true },
         { text: " error(s)", color: "gray" },
       ],
-      delay: 36,
+      delay: 24,
     },
   ];
 
   // === Phase 2: fix コマンド ===
-  const fixCommandStart = 160;
+  const fixCommandStart = 120;
   const fixCommand = "sqlex fix query.sql";
-  const fixOutputStart = 220;
+  const fixOutputStart = 165;
 
-  // fix 出力行
   const fixOutputLines: { segments: TextSegment[]; delay: number }[] = [
     {
       segments: [
@@ -116,15 +114,15 @@ export const SqlexDemo: React.FC = () => {
       ],
       delay: 0,
     },
-    { segments: [{ text: "" }], delay: 5 },
+    { segments: [{ text: "" }], delay: 3 },
     {
       segments: [
         { text: "  Fixed: ", color: "green" },
         { text: "Removed trailing comma on line 3", color: "white" },
       ],
-      delay: 10,
+      delay: 6,
     },
-    { segments: [{ text: "" }], delay: 15 },
+    { segments: [{ text: "" }], delay: 9 },
     {
       segments: [
         { text: "Total: ", color: "gray" },
@@ -133,7 +131,34 @@ export const SqlexDemo: React.FC = () => {
         { text: "1", color: "green", bold: true },
         { text: " fix(es)", color: "gray" },
       ],
-      delay: 20,
+      delay: 12,
+    },
+  ];
+
+  // === Phase 3: check コマンド（成功） ===
+  const verifyCommandStart = 220;
+  const verifyOutputStart = 265;
+
+  const verifyOutputLines: { segments: TextSegment[]; delay: number }[] = [
+    {
+      segments: [
+        { text: "✓ ", color: "green", bold: true },
+        { text: "query.sql", color: "white", bold: true },
+        { text: " - ", color: "gray" },
+        { text: "OK", color: "green", bold: true },
+      ],
+      delay: 0,
+    },
+    { segments: [{ text: "" }], delay: 5 },
+    {
+      segments: [
+        { text: "Total: ", color: "gray" },
+        { text: "1", color: "white", bold: true },
+        { text: " file(s), ", color: "gray" },
+        { text: "0", color: "green", bold: true },
+        { text: " error(s)", color: "gray" },
+      ],
+      delay: 10,
     },
   ];
 
@@ -147,11 +172,11 @@ export const SqlexDemo: React.FC = () => {
       }}
     >
       <Terminal>
-        {/* Phase 1: check コマンド */}
+        {/* Phase 1: check コマンド（エラー） */}
         <TypingLine
           text={checkCommand}
           startFrame={0}
-          typingSpeed={0.6}
+          typingSpeed={0.7}
           prefix={promptPrefix}
         />
 
@@ -177,7 +202,7 @@ export const SqlexDemo: React.FC = () => {
             <TypingLine
               text={fixCommand}
               startFrame={fixCommandStart + 5}
-              typingSpeed={0.6}
+              typingSpeed={0.7}
               prefix={promptPrefix}
             />
           </>
@@ -190,6 +215,34 @@ export const SqlexDemo: React.FC = () => {
                 key={`fix-${i}`}
                 segments={line.segments}
                 showAtFrame={fixOutputStart + line.delay}
+              />
+            ))}
+          </>
+        )}
+
+        {/* Phase 3: check コマンド（成功確認） */}
+        {frame >= verifyCommandStart && (
+          <>
+            <TerminalLine
+              segments={[{ text: "" }]}
+              showAtFrame={verifyCommandStart}
+            />
+            <TypingLine
+              text={checkCommand}
+              startFrame={verifyCommandStart + 5}
+              typingSpeed={0.7}
+              prefix={promptPrefix}
+            />
+          </>
+        )}
+
+        {frame >= verifyOutputStart && (
+          <>
+            {verifyOutputLines.map((line, i) => (
+              <TerminalLine
+                key={`verify-${i}`}
+                segments={line.segments}
+                showAtFrame={verifyOutputStart + line.delay}
               />
             ))}
           </>
