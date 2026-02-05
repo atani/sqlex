@@ -23,9 +23,9 @@ pub fn analyze_error(
 ) -> Option<ErrorHint> {
     let lines: Vec<&str> = source.lines().collect();
 
-    // Pattern 1: "Expected: ..., found: ..."
+    // Pattern 1: "Expected ..., found: ..." or "Expected: ..., found: ..."
     // → Likely trailing comma before keyword
-    if error_msg.contains("Expected:") && error_msg.contains("found:") {
+    if error_msg.contains("Expected") && error_msg.contains("found") {
         // Look for trailing comma in the lines before the error
         // Strategy: Find the nearest keyword line above error, then check if the line before it has comma
 
