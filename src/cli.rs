@@ -1,4 +1,13 @@
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+
+#[derive(Debug, Clone, Copy, Default, ValueEnum)]
+pub enum FixFormat {
+    /// Summary of changes (default)
+    #[default]
+    Summary,
+    /// Unified diff format
+    Diff,
+}
 
 #[derive(Parser)]
 #[command(name = "sqlex")]
@@ -39,6 +48,10 @@ pub enum Command {
         /// Show what would be changed without modifying files
         #[arg(long)]
         dry_run: bool,
+
+        /// Output format for dry-run (summary, diff)
+        #[arg(short, long, default_value = "summary")]
+        format: FixFormat,
     },
 
     /// Lint SQL files for style issues
