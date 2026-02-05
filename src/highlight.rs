@@ -3,14 +3,30 @@ use colored::Colorize;
 pub struct SourceHighlighter;
 
 impl SourceHighlighter {
-    /// Display source code with highlighted error location
-    pub fn display_error(source: &str, line: usize, column: usize, context_lines: usize) -> String {
+    /// Display source code with highlighted error location and optional suspect line
+    pub fn display_error_with_hint(
+        source: &str,
+        error_line: usize,
+        column: usize,
+        suspect_line: Option<usize>,
+        context_lines: usize,
+    ) -> String {
         let lines: Vec<&str> = source.lines().collect();
         let mut output = Vec::new();
 
-        // Calculate line range to display
-        let start_line = line.saturating_sub(context_lines + 1);
-        let end_line = (line + context_lines).min(lines.len());
+        // Calculate line range to display (expand if suspect line is outside normal range)
+        let mut start_line = error_line.saturating_sub(context_lines + 1);
+        let mut end_line = (error_line + context_lines).min(lines.len());
+
+        // Expand range to include suspect line if needed
+        if let Some(suspect) = suspect_line {
+            if suspect < start_line + 1 {
+                start_line = suspect.saturating_sub(1);
+            }
+            if suspect > end_line {
+                end_line = suspect.min(lines.len());
+            }
+        }
 
         // Line number width for formatting
         let line_num_width = end_line.to_string().len();
@@ -23,8 +39,8 @@ impl SourceHighlighter {
 
             let line_num_str = format!("{:>width$}", line_num, width = line_num_width);
 
-            if line_num == line {
-                // Error line - highlight
+            if line_num == error_line {
+                // Error line - highlight in red
                 output.push(format!(
                     "{} {} {}",
                     line_num_str.red().bold(),
@@ -41,6 +57,15 @@ impl SourceHighlighter {
                     "|".red(),
                     indicator.red().bold()
                 ));
+            } else if suspect_line == Some(line_num) {
+                // Suspect line - highlight in yellow with marker
+                output.push(format!(
+                    "{} {} {}  {}",
+                    line_num_str.yellow().bold(),
+                    "|".yellow(),
+                    line_content,
+                    "← ここを確認".yellow().bold()
+                ));
             } else {
                 // Context line
                 output.push(format!(
@@ -53,6 +78,11 @@ impl SourceHighlighter {
         }
 
         output.join("\n")
+    }
+
+    /// Display source code with highlighted error location (backward compatible)
+    pub fn display_error(source: &str, line: usize, column: usize, context_lines: usize) -> String {
+        Self::display_error_with_hint(source, line, column, None, context_lines)
     }
 
     /// Create indicator line with caret pointing to error column

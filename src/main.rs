@@ -2,6 +2,7 @@ mod checker;
 mod cli;
 mod error;
 mod highlight;
+mod hints;
 mod i18n;
 mod linter;
 

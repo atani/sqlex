@@ -1,5 +1,6 @@
 use crate::error::SqlexError;
 use crate::highlight::SourceHighlighter;
+use crate::hints;
 use crate::i18n::Messages;
 use crate::linter::{KeywordCase, LintConfig, Linter};
 use anyhow::{Context, Result};
@@ -131,9 +132,23 @@ pub fn check(paths: &[String], dialect_name: &str, messages: &Messages) -> Resul
                     "  {}",
                     messages.syntax_error(error.line, error.column, &error.message)
                 );
-                // Display highlighted source code
-                let highlight =
-                    SourceHighlighter::display_error(&content, error.line, error.column, 1);
+
+                // Analyze error and provide hints
+                let hint = hints::analyze_error(&error.message, &content, error.line, messages);
+
+                if let Some(ref h) = hint {
+                    println!("  {} {}", "💡".yellow(), h.hint.yellow());
+                }
+
+                // Display highlighted source code with suspect line
+                let suspect_line = hint.and_then(|h| h.suspect_line);
+                let highlight = SourceHighlighter::display_error_with_hint(
+                    &content,
+                    error.line,
+                    error.column,
+                    suspect_line,
+                    2,
+                );
                 println!("{}", highlight);
                 println!();
             }

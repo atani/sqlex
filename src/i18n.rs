@@ -107,4 +107,40 @@ impl Messages {
             _ => format!("\nTotal: {} file(s), {} warning(s)", files, warnings),
         }
     }
+
+    // Hint messages
+    pub fn hint_trailing_comma(&self, line: usize) -> String {
+        match self.lang.as_str() {
+            "ja" => format!("{}行目の末尾に余計なカンマがある可能性があります", line),
+            _ => format!("Line {} may have a trailing comma that should be removed", line),
+        }
+    }
+
+    pub fn hint_check_parentheses(&self) -> String {
+        match self.lang.as_str() {
+            "ja" => "括弧の対応を確認してください".to_string(),
+            _ => "Check for mismatched parentheses".to_string(),
+        }
+    }
+
+    pub fn hint_missing_parentheses(&self) -> String {
+        match self.lang.as_str() {
+            "ja" => "関数呼び出しに括弧が必要かもしれません".to_string(),
+            _ => "Function call may require parentheses".to_string(),
+        }
+    }
+
+    pub fn hint_unclosed_parentheses(&self, count: i32) -> String {
+        match self.lang.as_str() {
+            "ja" => format!("閉じ括弧が{}個不足しています", count),
+            _ => format!("{} unclosed parenthesis(es) found", count),
+        }
+    }
+
+    pub fn hint_unclosed_quote(&self) -> String {
+        match self.lang.as_str() {
+            "ja" => "閉じられていない引用符があります".to_string(),
+            _ => "Unclosed quote found".to_string(),
+        }
+    }
 }
