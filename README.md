@@ -15,7 +15,7 @@ A fast SQL syntax checker and linter written in Rust.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install atani/homebrew-tap/sqlex
+brew install atani/tap/sqlex
 ```
 
 ### From Source

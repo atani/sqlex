@@ -2,33 +2,33 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
+
+permissions:
+  contents: write
+  pull-requests: write
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  create-release:
-    name: Create Release
+  release-please:
     runs-on: ubuntu-latest
     outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+      upload_url: ${{ steps.release.outputs.upload_url }}
     steps:
-      - name: Create Release
-        id: create_release
-        uses: actions/create-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - uses: googleapis/release-please-action@v4
+        id: release
         with:
-          tag_name: ${{ github.ref_name }}
-          release_name: Release ${{ github.ref_name }}
-          draft: false
-          prerelease: false
+          release-type: rust
 
   build-release:
     name: Build Release
-    needs: create-release
+    needs: release-please
+    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -54,7 +54,7 @@ jobs:
             artifact_name: sqlex.exe
             asset_name: sqlex-windows-x86_64.exe
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v4
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -74,85 +74,80 @@ jobs:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
       - name: Upload Release Asset
-        uses: actions/upload-release-asset@v1
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
-          asset_name: ${{ matrix.asset_name }}
-          asset_content_type: application/octet-stream
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload ${{ needs.release-please.outputs.tag_name }} \
+            target/${{ matrix.target }}/release/${{ matrix.artifact_name }}#${{ matrix.asset_name }}
 
   publish-homebrew:
     name: Update Homebrew Formula
-    needs: build-release
+    needs: [release-please, build-release]
+    if: ${{ needs.release-please.outputs.release_created }}
     runs-on: ubuntu-latest
     steps:
       - name: Checkout homebrew-tap
-        uses: actions/checkout@v6
+        uses: actions/checkout@v4
         with:
           repository: atani/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
       - name: Download release assets for checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
+          TAG="${{ needs.release-please.outputs.tag_name }}"
+          VERSION="${TAG#v}"
 
-          curl -sL "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-darwin-x86_64" -o sqlex-darwin-x86_64
-          curl -sL "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-darwin-aarch64" -o sqlex-darwin-aarch64
-          curl -sL "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-linux-x86_64" -o sqlex-linux-x86_64
-          curl -sL "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-linux-aarch64" -o sqlex-linux-aarch64
+          gh release download "$TAG" --repo atani/sqlex --pattern "sqlex-*"
 
           echo "SHA256_DARWIN_X86=$(sha256sum sqlex-darwin-x86_64 | cut -d' ' -f1)" >> $GITHUB_ENV
           echo "SHA256_DARWIN_ARM=$(sha256sum sqlex-darwin-aarch64 | cut -d' ' -f1)" >> $GITHUB_ENV
           echo "SHA256_LINUX_X86=$(sha256sum sqlex-linux-x86_64 | cut -d' ' -f1)" >> $GITHUB_ENV
           echo "SHA256_LINUX_ARM=$(sha256sum sqlex-linux-aarch64 | cut -d' ' -f1)" >> $GITHUB_ENV
           echo "VERSION=${VERSION}" >> $GITHUB_ENV
+          echo "TAG=${TAG}" >> $GITHUB_ENV
 
       - name: Update Homebrew formula
         run: |
           mkdir -p homebrew-tap/Formula
-          cat > homebrew-tap/Formula/sqlex.rb << 'FORMULA'
+          cat > homebrew-tap/Formula/sqlex.rb << EOF
           class Sqlex < Formula
             desc "SQL syntax checker and linter"
             homepage "https://github.com/atani/sqlex"
-            version "${{ env.VERSION }}"
+            version "${VERSION}"
             license "MIT"
 
             on_macos do
               if Hardware::CPU.intel?
-                url "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-darwin-x86_64"
-                sha256 "${{ env.SHA256_DARWIN_X86 }}"
+                url "https://github.com/atani/sqlex/releases/download/${TAG}/sqlex-darwin-x86_64"
+                sha256 "${SHA256_DARWIN_X86}"
               else
-                url "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-darwin-aarch64"
-                sha256 "${{ env.SHA256_DARWIN_ARM }}"
+                url "https://github.com/atani/sqlex/releases/download/${TAG}/sqlex-darwin-aarch64"
+                sha256 "${SHA256_DARWIN_ARM}"
               end
             end
 
             on_linux do
               if Hardware::CPU.intel?
-                url "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-linux-x86_64"
-                sha256 "${{ env.SHA256_LINUX_X86 }}"
+                url "https://github.com/atani/sqlex/releases/download/${TAG}/sqlex-linux-x86_64"
+                sha256 "${SHA256_LINUX_X86}"
               else
-                url "https://github.com/atani/sqlex/releases/download/${{ github.ref_name }}/sqlex-linux-aarch64"
-                sha256 "${{ env.SHA256_LINUX_ARM }}"
+                url "https://github.com/atani/sqlex/releases/download/${TAG}/sqlex-linux-aarch64"
+                sha256 "${SHA256_LINUX_ARM}"
               end
             end
 
             def install
-              bin.install "sqlex-darwin-x86_64" => "sqlex" if OS.mac? && Hardware::CPU.intel?
-              bin.install "sqlex-darwin-aarch64" => "sqlex" if OS.mac? && Hardware::CPU.arm?
-              bin.install "sqlex-linux-x86_64" => "sqlex" if OS.linux? && Hardware::CPU.intel?
-              bin.install "sqlex-linux-aarch64" => "sqlex" if OS.linux? && Hardware::CPU.arm?
+              bin.install Dir["sqlex-*"].first => "sqlex"
             end
 
             test do
               system "#{bin}/sqlex", "--version"
             end
           end
-          FORMULA
+          EOF
 
       - name: Commit and push formula
         working-directory: homebrew-tap
@@ -160,5 +155,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/sqlex.rb
-          git commit -m "Update sqlex to ${{ github.ref_name }}" || echo "No changes to commit"
+          git commit -m "Update sqlex to ${{ needs.release-please.outputs.tag_name }}"
           git push
