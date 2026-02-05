@@ -31,8 +31,9 @@ fn main() -> Result<()> {
             paths,
             dialect,
             dry_run,
+            format,
         } => {
-            checker::fix(&paths, &dialect, dry_run, &messages)?;
+            checker::fix(&paths, &dialect, dry_run, format, &messages)?;
         }
         Command::Lint {
             paths,

@@ -23,6 +23,9 @@ anyhow = "1"
 # File traversal
 walkdir = "2"
 
+# Diff generation
+similar = "2"
+
 # Serialization (for config)
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"

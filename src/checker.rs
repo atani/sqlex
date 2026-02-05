@@ -1,3 +1,4 @@
+use crate::cli::FixFormat;
 use crate::error::SqlexError;
 use crate::highlight::SourceHighlighter;
 use crate::hints;
@@ -5,6 +6,7 @@ use crate::i18n::Messages;
 use crate::linter::{KeywordCase, LintConfig, Linter};
 use anyhow::{Context, Result};
 use colored::Colorize;
+use similar::{ChangeTag, TextDiff};
 use sqlparser::dialect::{
     BigQueryDialect, Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
 };
@@ -170,7 +172,13 @@ pub fn check(paths: &[String], dialect_name: &str, messages: &Messages) -> Resul
     Ok(())
 }
 
-pub fn fix(paths: &[String], dialect_name: &str, dry_run: bool, messages: &Messages) -> Result<()> {
+pub fn fix(
+    paths: &[String],
+    dialect_name: &str,
+    dry_run: bool,
+    format: FixFormat,
+    messages: &Messages,
+) -> Result<()> {
     let dialect = get_dialect(dialect_name)?;
     let files = collect_sql_files(paths);
 
@@ -191,7 +199,15 @@ pub fn fix(paths: &[String], dialect_name: &str, dry_run: bool, messages: &Messa
 
                 if new_content != content {
                     if dry_run {
-                        println!("{}", messages.would_fix(file).yellow());
+                        match format {
+                            FixFormat::Summary => {
+                                println!("{}", messages.would_fix(file).yellow());
+                                print_summary_diff(&content, &new_content);
+                            }
+                            FixFormat::Diff => {
+                                print_unified_diff(file, &content, &new_content);
+                            }
+                        }
                     } else {
                         fs::write(file, &new_content)
                             .with_context(|| format!("Failed to write: {}", file))?;
@@ -207,6 +223,49 @@ pub fn fix(paths: &[String], dialect_name: &str, dry_run: bool, messages: &Messa
     }
 
     Ok(())
+}
+
+fn print_summary_diff(old: &str, new: &str) {
+    let diff = TextDiff::from_lines(old, new);
+    let mut line_num = 0;
+
+    for change in diff.iter_all_changes() {
+        match change.tag() {
+            ChangeTag::Equal => {
+                line_num += 1;
+            }
+            ChangeTag::Delete => {
+                line_num += 1;
+                // Find the corresponding insert
+                let old_line = change.value().trim_end();
+                // We'll show the change on this line
+                println!("  {}", format!("- Line {}: {}", line_num, old_line).red());
+            }
+            ChangeTag::Insert => {
+                let new_line = change.value().trim_end();
+                println!("  {}", format!("+ Line {}: {}", line_num, new_line).green());
+            }
+        }
+    }
+}
+
+fn print_unified_diff(file: &str, old: &str, new: &str) {
+    let diff = TextDiff::from_lines(old, new);
+
+    println!("{}", format!("--- {}", file).red());
+    println!("{}", format!("+++ {}", file).green());
+
+    for hunk in diff.unified_diff().context_radius(3).iter_hunks() {
+        println!("{}", format!("{}", hunk.header()).cyan());
+        for change in hunk.iter_changes() {
+            let (sign, color_fn): (&str, fn(&str) -> colored::ColoredString) = match change.tag() {
+                ChangeTag::Delete => ("-", |s: &str| s.red()),
+                ChangeTag::Insert => ("+", |s: &str| s.green()),
+                ChangeTag::Equal => (" ", |s: &str| s.normal()),
+            };
+            print!("{}", color_fn(&format!("{}{}", sign, change.value())));
+        }
+    }
 }
 
 pub fn lint(

@@ -245,6 +245,45 @@ mod fix_command {
         // sqlparser normalizes to uppercase
         assert!(actual.contains("SELECT") || actual.contains("select"));
     }
+
+    #[test]
+    fn test_fix_dry_run_diff_format() {
+        let dir = TempDir::new().unwrap();
+        let content = "select  id  from  users";
+        let path = create_temp_sql(&dir, "messy.sql", content);
+
+        let output = sqlex()
+            .args(["fix", "--dry-run", "-f", "diff", &path])
+            .output()
+            .expect("Failed to execute");
+
+        // File should not be modified
+        let actual = fs::read_to_string(&path).unwrap();
+        assert_eq!(actual, content);
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Should contain unified diff markers
+        assert!(stdout.contains("---"));
+        assert!(stdout.contains("+++"));
+        assert!(stdout.contains("@@"));
+    }
+
+    #[test]
+    fn test_fix_dry_run_summary_format() {
+        let dir = TempDir::new().unwrap();
+        let content = "select  id  from  users";
+        let path = create_temp_sql(&dir, "messy.sql", content);
+
+        let output = sqlex()
+            .args(["fix", "--dry-run", "-f", "summary", &path])
+            .output()
+            .expect("Failed to execute");
+
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        // Should contain summary format
+        assert!(stdout.contains("Would fix") || stdout.contains("修正予定"));
+        assert!(stdout.contains("Line"));
+    }
 }
 
 mod help_and_version {
