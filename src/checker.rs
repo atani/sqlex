@@ -239,17 +239,11 @@ fn print_summary_diff(old: &str, new: &str) {
                 // Find the corresponding insert
                 let old_line = change.value().trim_end();
                 // We'll show the change on this line
-                println!(
-                    "  {}",
-                    format!("- Line {}: {}", line_num, old_line).red()
-                );
+                println!("  {}", format!("- Line {}: {}", line_num, old_line).red());
             }
             ChangeTag::Insert => {
                 let new_line = change.value().trim_end();
-                println!(
-                    "  {}",
-                    format!("+ Line {}: {}", line_num, new_line).green()
-                );
+                println!("  {}", format!("+ Line {}: {}", line_num, new_line).green());
             }
         }
     }
