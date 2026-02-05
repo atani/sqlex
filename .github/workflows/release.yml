@@ -54,7 +54,7 @@ jobs:
             artifact_name: sqlex.exe
             asset_name: sqlex-windows-x86_64.exe
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -89,7 +89,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout homebrew-tap
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           repository: atani/homebrew-tap
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
