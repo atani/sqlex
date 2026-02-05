@@ -1,8 +1,8 @@
 # sqlex
 
-![Demo](./demo.gif)
-
 A fast SQL syntax checker and linter written in Rust.
+
+![Demo](./demo.gif)
 
 ## Features
 
