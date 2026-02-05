@@ -1,0 +1,38 @@
+[package]
+name = "sqlex"
+version = "0.1.0"
+edition = "2021"
+description = "SQL syntax checker and linter"
+license = "MIT"
+repository = "https://github.com/atani/sqlex"
+
+[dependencies]
+# SQL parser
+sqlparser = "0.53"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Output formatting
+colored = "2"
+
+# Error handling
+thiserror = "2"
+anyhow = "1"
+
+# File traversal
+walkdir = "2"
+
+# Serialization (for config)
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+# i18n
+sys-locale = "0.3"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+lto = true
+strip = true
