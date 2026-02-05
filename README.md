@@ -4,7 +4,7 @@ A fast SQL syntax checker and linter written in Rust.
 
 ## Features
 
-- **Syntax Checking**: Validates SQL syntax with detailed error messages and source highlighting
+- **Syntax Checking**: Validates SQL syntax with detailed error messages, source highlighting, and helpful hints
 - **Linting**: Enforces SQL style rules (keyword case, SELECT *, trailing semicolons, etc.)
 - **Auto-fix**: Automatically formats SQL files
 - **Multi-dialect Support**: MySQL, PostgreSQL, SQLite, BigQuery, and generic SQL
@@ -15,7 +15,7 @@ A fast SQL syntax checker and linter written in Rust.
 ### Homebrew (macOS/Linux)
 
 ```bash
-brew install atani/tap/sqlex
+brew install atani/homebrew-tap/sqlex
 ```
 
 ### From Source
@@ -100,10 +100,13 @@ sqlex --lang ja check query.sql
 ```
 $ sqlex check invalid.sql
 ✗ invalid.sql - 1 error(s)
-  Syntax error (line 3, col 15): Expected: an expression, found: ;
-2 | FROM users
-3 | WHERE active =;
-  |               ^
+  Syntax error (line 5, col 6): sql parser error: Expected an expression, found: FROM
+  💡 Line 4 may have a trailing comma that should be removed
+3 |   name,
+4 |   email,  ← check here
+5 | FROM users
+  |      ^
+6 | WHERE active = 1
 
 Total: 1 file(s), 1 error(s)
 ```
