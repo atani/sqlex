@@ -8,13 +8,13 @@ repository = "https://github.com/atani/sqlex"
 
 [dependencies]
 # SQL parser
-sqlparser = "0.53"
+sqlparser = "0.60"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
 
 # Output formatting
-colored = "2"
+colored = "3"
 
 # Error handling
 thiserror = "2"
