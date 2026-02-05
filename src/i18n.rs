@@ -112,7 +112,10 @@ impl Messages {
     pub fn hint_trailing_comma(&self, line: usize) -> String {
         match self.lang.as_str() {
             "ja" => format!("{}行目の末尾に余計なカンマがある可能性があります", line),
-            _ => format!("Line {} may have a trailing comma that should be removed", line),
+            _ => format!(
+                "Line {} may have a trailing comma that should be removed",
+                line
+            ),
         }
     }
 

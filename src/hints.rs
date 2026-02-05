@@ -10,9 +10,9 @@ pub struct ErrorHint {
 
 /// SQL keywords that typically start a new clause
 const CLAUSE_KEYWORDS: &[&str] = &[
-    "SELECT", "FROM", "WHERE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS",
-    "ON", "AND", "OR", "ORDER", "GROUP", "HAVING", "LIMIT", "OFFSET", "UNION", "INSERT",
-    "UPDATE", "DELETE", "SET", "VALUES", "INTO",
+    "SELECT", "FROM", "WHERE", "JOIN", "LEFT", "RIGHT", "INNER", "OUTER", "FULL", "CROSS", "ON",
+    "AND", "OR", "ORDER", "GROUP", "HAVING", "LIMIT", "OFFSET", "UNION", "INSERT", "UPDATE",
+    "DELETE", "SET", "VALUES", "INTO",
 ];
 
 pub fn analyze_error(
@@ -35,7 +35,10 @@ pub fn analyze_error(
 
             for check_idx in (0..error_line).rev() {
                 let line_content = lines[check_idx].trim().to_uppercase();
-                if CLAUSE_KEYWORDS.iter().any(|kw| line_content.starts_with(kw)) {
+                if CLAUSE_KEYWORDS
+                    .iter()
+                    .any(|kw| line_content.starts_with(kw))
+                {
                     keyword_line = Some(check_idx + 1); // 1-indexed
                     break;
                 }
@@ -150,12 +153,7 @@ WHERE
 WHERE
   bill_id = 'test'"#;
         let messages = Messages::new("en");
-        let hint = analyze_error(
-            "Expected: end of statement, found: =",
-            source,
-            6,
-            &messages,
-        );
+        let hint = analyze_error("Expected: end of statement, found: =", source, 6, &messages);
 
         assert!(hint.is_some());
         let hint = hint.unwrap();
