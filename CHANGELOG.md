@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.1](https://github.com/atani/sqlex/compare/v0.3.0...v0.3.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* preserve original formatting during fix command ([#19](https://github.com/atani/sqlex/issues/19)) ([1f4a64a](https://github.com/atani/sqlex/commit/1f4a64a77d85d5b10df663818a4391caa0ba83af))
+
 ## [0.3.0](https://github.com/atani/sqlex/compare/v0.2.0...v0.3.0) (2026-02-05)
 
 
