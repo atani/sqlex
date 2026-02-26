@@ -255,7 +255,7 @@ impl Linter {
     }
 }
 
-fn is_sql_keyword(word: &str) -> bool {
+pub fn is_sql_keyword(word: &str) -> bool {
     const KEYWORDS: &[&str] = &[
         "SELECT",
         "FROM",

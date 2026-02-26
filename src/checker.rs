@@ -3,7 +3,7 @@ use crate::error::SqlexError;
 use crate::highlight::SourceHighlighter;
 use crate::hints;
 use crate::i18n::Messages;
-use crate::linter::{KeywordCase, LintConfig, Linter};
+use crate::linter::{is_sql_keyword, KeywordCase, LintConfig, Linter};
 use anyhow::{Context, Result};
 use colored::Colorize;
 use similar::{ChangeTag, TextDiff};
@@ -11,6 +11,7 @@ use sqlparser::dialect::{
     BigQueryDialect, Dialect, GenericDialect, MySqlDialect, PostgreSqlDialect, SQLiteDialect,
 };
 use sqlparser::parser::Parser;
+use sqlparser::tokenizer::{Token, Tokenizer};
 use std::fs;
 use std::path::Path;
 use walkdir::WalkDir;
@@ -191,38 +192,102 @@ pub fn fix(
         let content =
             fs::read_to_string(file).with_context(|| format!("Failed to read: {}", file))?;
 
-        // Parse and reformat
-        match Parser::parse_sql(dialect.as_ref(), &content) {
-            Ok(ast) => {
-                let formatted: Vec<String> = ast.iter().map(|stmt| stmt.to_string()).collect();
-                let new_content = formatted.join(";\n") + ";\n";
+        let new_content = fix_content(&content, dialect.as_ref())?;
 
-                if new_content != content {
-                    if dry_run {
-                        match format {
-                            FixFormat::Summary => {
-                                println!("{}", messages.would_fix(file).yellow());
-                                print_summary_diff(&content, &new_content);
-                            }
-                            FixFormat::Diff => {
-                                print_unified_diff(file, &content, &new_content);
-                            }
-                        }
-                    } else {
-                        fs::write(file, &new_content)
-                            .with_context(|| format!("Failed to write: {}", file))?;
-                        println!("{}", messages.fixed(file).green());
+        if new_content != content {
+            if dry_run {
+                match format {
+                    FixFormat::Summary => {
+                        println!("{}", messages.would_fix(file).yellow());
+                        print_summary_diff(&content, &new_content);
+                    }
+                    FixFormat::Diff => {
+                        print_unified_diff(file, &content, &new_content);
                     }
                 }
-            }
-            Err(e) => {
-                println!("{}", messages.file_error(file, 1).red());
-                println!("  Cannot fix file with syntax errors: {}", e);
+            } else {
+                fs::write(file, &new_content)
+                    .with_context(|| format!("Failed to write: {}", file))?;
+                println!("{}", messages.fixed(file).green());
             }
         }
     }
 
     Ok(())
+}
+
+/// Build a mapping from (line, column) to byte offset in the source string.
+/// Both line and column are 1-based (matching sqlparser's Location).
+fn build_line_offsets(src: &str) -> Vec<usize> {
+    let mut offsets = vec![0]; // offsets[0] = byte offset of line 1
+    for (i, b) in src.bytes().enumerate() {
+        if b == b'\n' {
+            offsets.push(i + 1);
+        }
+    }
+    offsets
+}
+
+fn location_to_byte_offset(line_offsets: &[usize], line: u64, column: u64) -> usize {
+    let line_idx = (line as usize).saturating_sub(1);
+    let col_offset = (column as usize).saturating_sub(1);
+    if line_idx < line_offsets.len() {
+        line_offsets[line_idx] + col_offset
+    } else {
+        // Fallback: end of string
+        line_offsets.last().copied().unwrap_or(0)
+    }
+}
+
+/// Fix SQL content using token-based partial replacement.
+/// Only modifies keyword case and trailing semicolons, preserving all original formatting.
+fn fix_content(content: &str, dialect: &dyn Dialect) -> Result<String> {
+    let mut result = content.to_string();
+
+    // 1. Fix keyword case using tokenizer (preserves original whitespace/indentation)
+    let mut tokenizer = Tokenizer::new(dialect, content);
+    match tokenizer.tokenize_with_location() {
+        Ok(tokens) => {
+            let line_offsets = build_line_offsets(content);
+
+            // Collect replacements: (byte_offset, original_len, replacement)
+            let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+
+            for token_with_span in &tokens {
+                if let Token::Word(word) = &token_with_span.token {
+                    if word.quote_style.is_none() && is_sql_keyword(&word.value) {
+                        let upper = word.value.to_uppercase();
+                        if word.value != upper {
+                            let offset = location_to_byte_offset(
+                                &line_offsets,
+                                token_with_span.span.start.line,
+                                token_with_span.span.start.column,
+                            );
+                            replacements.push((offset, word.value.len(), upper));
+                        }
+                    }
+                }
+            }
+
+            // Apply replacements in reverse order to preserve byte offsets
+            for (offset, len, replacement) in replacements.into_iter().rev() {
+                if offset + len <= result.len() {
+                    result.replace_range(offset..offset + len, &replacement);
+                }
+            }
+        }
+        Err(_) => {
+            // Tokenization failed; skip keyword fix for this file
+        }
+    }
+
+    // 2. Fix trailing semicolon
+    let trimmed = result.trim_end();
+    if !trimmed.is_empty() && !trimmed.ends_with(';') {
+        result = trimmed.to_string() + ";\n";
+    }
+
+    Ok(result)
 }
 
 fn print_summary_diff(old: &str, new: &str) {
