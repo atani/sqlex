@@ -93,7 +93,7 @@ jobs:
         uses: actions/checkout@v6
         with:
           repository: atani/homebrew-tap
-          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+          token: ${{ secrets.HOMEBREW_TAP_GITHUB_TOKEN }}
           path: homebrew-tap
 
       - name: Download release assets for checksums
