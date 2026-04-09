@@ -24,7 +24,7 @@ anyhow = "1"
 walkdir = "2"
 
 # Diff generation
-similar = "2"
+similar = "3"
 
 # Serialization (for config)
 serde = { version = "1", features = ["derive"] }
