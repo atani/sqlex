@@ -8,7 +8,7 @@ repository = "https://github.com/atani/sqlex"
 
 [dependencies]
 # SQL parser
-sqlparser = "0.61"
+sqlparser = "0.62"
 
 # CLI
 clap = { version = "4", features = ["derive"] }
@@ -24,7 +24,7 @@ anyhow = "1"
 walkdir = "2"
 
 # Diff generation
-similar = "2"
+similar = "3"
 
 # Serialization (for config)
 serde = { version = "1", features = ["derive"] }
