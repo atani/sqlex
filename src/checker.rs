@@ -397,3 +397,173 @@ pub fn lint(
 
     Ok(())
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+    use tempfile::TempDir;
+
+    #[test]
+    fn test_get_dialect_known() {
+        for name in [
+            "generic",
+            "mysql",
+            "postgres",
+            "postgresql",
+            "sqlite",
+            "bigquery",
+        ] {
+            assert!(
+                get_dialect(name).is_ok(),
+                "dialect {name} should be supported"
+            );
+        }
+        // Case-insensitive.
+        assert!(get_dialect("MySQL").is_ok());
+    }
+
+    #[test]
+    fn test_get_dialect_unknown_errors() {
+        let err = get_dialect("oracle").unwrap_err();
+        assert!(err.to_string().contains("Unsupported dialect"));
+        assert!(err.to_string().contains("oracle"));
+    }
+
+    #[test]
+    fn test_parse_error_location_colon_format() {
+        let (line, col) = parse_error_location("sql parser error at Line: 5, Column: 6");
+        assert_eq!((line, col), (5, 6));
+    }
+
+    #[test]
+    fn test_parse_error_location_space_format() {
+        let (line, col) = parse_error_location("error at Line: 12, Column 3");
+        assert_eq!((line, col), (12, 3));
+    }
+
+    #[test]
+    fn test_parse_error_location_defaults_when_absent() {
+        let (line, col) = parse_error_location("some error without location");
+        assert_eq!((line, col), (1, 1));
+    }
+
+    #[test]
+    fn test_check_sql_valid_returns_no_errors() {
+        let d = GenericDialect {};
+        assert!(check_sql("SELECT id FROM users;", &d).is_empty());
+    }
+
+    #[test]
+    fn test_check_sql_invalid_returns_error() {
+        let d = GenericDialect {};
+        let errors = check_sql("SELECT id FROM users WHERE;", &d);
+        assert_eq!(errors.len(), 1);
+        assert!(!errors[0].message.is_empty());
+    }
+
+    #[test]
+    fn test_build_line_offsets() {
+        // "a\nbb\nccc" → line starts at byte 0, 2, 5.
+        let offsets = build_line_offsets("a\nbb\nccc");
+        assert_eq!(offsets, vec![0, 2, 5]);
+    }
+
+    #[test]
+    fn test_build_line_offsets_single_line() {
+        assert_eq!(build_line_offsets("SELECT 1"), vec![0]);
+    }
+
+    #[test]
+    fn test_location_to_byte_offset() {
+        let offsets = build_line_offsets("abc\ndef");
+        // Line 2, column 1 → byte offset 4 (start of "def").
+        assert_eq!(location_to_byte_offset(&offsets, 2, 1), 4);
+        // Line 1, column 3 → byte offset 2.
+        assert_eq!(location_to_byte_offset(&offsets, 1, 3), 2);
+    }
+
+    #[test]
+    fn test_location_to_byte_offset_out_of_range_falls_back() {
+        let offsets = build_line_offsets("abc");
+        // Line beyond the input → falls back to last known offset.
+        assert_eq!(location_to_byte_offset(&offsets, 99, 1), 0);
+    }
+
+    #[test]
+    fn test_fix_content_uppercases_keywords() {
+        let d = GenericDialect {};
+        let out = fix_content("select id from users;", &d).unwrap();
+        assert!(out.contains("SELECT"));
+        assert!(out.contains("FROM"));
+        // Identifiers are preserved as-is.
+        assert!(out.contains("id"));
+        assert!(out.contains("users"));
+    }
+
+    #[test]
+    fn test_fix_content_adds_trailing_semicolon() {
+        let d = GenericDialect {};
+        let out = fix_content("SELECT 1", &d).unwrap();
+        assert!(out.trim_end().ends_with(';'));
+    }
+
+    #[test]
+    fn test_fix_content_preserves_existing_semicolon() {
+        let d = GenericDialect {};
+        let out = fix_content("SELECT 1;\n", &d).unwrap();
+        // Already terminated → no extra semicolon appended.
+        assert_eq!(out.matches(';').count(), 1);
+    }
+
+    #[test]
+    fn test_fix_content_preserves_whitespace_and_quoted_identifiers() {
+        let d = GenericDialect {};
+        // Double whitespace between tokens must be preserved (token-based replacement).
+        let out = fix_content("select  id  from  users;", &d).unwrap();
+        assert!(out.contains("SELECT  id  FROM  users"));
+    }
+
+    #[test]
+    fn test_collect_sql_files_filters_extension() {
+        let dir = TempDir::new().unwrap();
+        let sql = dir.path().join("a.sql");
+        let txt = dir.path().join("b.txt");
+        fs::write(&sql, "SELECT 1;").unwrap();
+        fs::write(&txt, "not sql").unwrap();
+
+        // Directory traversal picks up only the .sql file.
+        let files = collect_sql_files(&[dir.path().to_string_lossy().to_string()]);
+        assert_eq!(files.len(), 1);
+        assert!(files[0].ends_with("a.sql"));
+    }
+
+    #[test]
+    fn test_collect_sql_files_single_file() {
+        let dir = TempDir::new().unwrap();
+        let sql = dir.path().join("q.sql");
+        fs::write(&sql, "SELECT 1;").unwrap();
+        let files = collect_sql_files(&[sql.to_string_lossy().to_string()]);
+        assert_eq!(files.len(), 1);
+    }
+
+    #[test]
+    fn test_collect_sql_files_ignores_non_sql_single_file() {
+        let dir = TempDir::new().unwrap();
+        let txt = dir.path().join("q.txt");
+        fs::write(&txt, "nope").unwrap();
+        let files = collect_sql_files(&[txt.to_string_lossy().to_string()]);
+        assert!(files.is_empty());
+    }
+
+    #[test]
+    fn test_dialect_specific_parsing() {
+        // BigQuery accepts backtick-quoted identifiers.
+        let bq = get_dialect("bigquery").unwrap();
+        assert!(check_sql("SELECT `col` FROM `t`;", bq.as_ref()).is_empty());
+
+        // PostgreSQL accepts double-quoted identifiers.
+        let pg = get_dialect("postgres").unwrap();
+        assert!(check_sql("SELECT \"col\" FROM \"t\";", pg.as_ref()).is_empty());
+    }
+}

@@ -168,4 +168,84 @@ mod tests {
         let indicator = SourceHighlighter::make_indicator(5, 20);
         assert_eq!(indicator, "    ^");
     }
+
+    #[test]
+    fn test_make_indicator_clamps_to_line_length() {
+        // Column past the end of line is clamped to line length.
+        let indicator = SourceHighlighter::make_indicator(100, 3);
+        assert_eq!(indicator, "   ^");
+    }
+
+    #[test]
+    fn test_make_indicator_column_zero() {
+        // Column 0/1 points at the first character.
+        assert_eq!(SourceHighlighter::make_indicator(1, 10), "^");
+    }
+
+    #[test]
+    fn test_display_error_renders_caret_and_context() {
+        colored::control::set_override(false);
+        let source = "SELECT id\nFROM users\nWHERE active =";
+        let output = SourceHighlighter::display_error(source, 3, 1, 2);
+        // Error line and surrounding context lines are shown.
+        assert!(output.contains("SELECT id"));
+        assert!(output.contains("FROM users"));
+        assert!(output.contains("WHERE active ="));
+        // Caret indicator line is present.
+        assert!(output.contains("^"));
+        // Line numbers are rendered.
+        assert!(output.contains("3 |"));
+    }
+
+    #[test]
+    fn test_display_error_with_suspect_line_below_range() {
+        colored::control::set_override(false);
+        let source = "a,\nSELECT\nb\nc\nd\ne\nFROM t";
+        // Error on line 7, suspect line 1 (outside the default context window).
+        let output = SourceHighlighter::display_error_with_hint(source, 7, 1, Some(1), 2);
+        // The suspect marker must be rendered.
+        assert!(output.contains("← ここを確認"));
+        // The suspect line content (line 1) is included even though it's far above.
+        assert!(output.contains("a,"));
+    }
+
+    #[test]
+    fn test_display_error_with_suspect_line_above_range() {
+        colored::control::set_override(false);
+        let source = "SELECT\na\nb\nc\nd\ne,\nFROM t";
+        // Error on line 1, suspect line 6 (below the default context window).
+        let output = SourceHighlighter::display_error_with_hint(source, 1, 1, Some(6), 1);
+        assert!(output.contains("← ここを確認"));
+        assert!(output.contains("e,"));
+    }
+
+    #[test]
+    fn test_display_range_single_line() {
+        colored::control::set_override(false);
+        let source = "SELECT abcdef FROM t";
+        let output = SourceHighlighter::display_range(source, 1, 1, 8, 13);
+        assert!(output.contains("SELECT"));
+        assert!(output.contains("abcde"));
+    }
+
+    #[test]
+    fn test_display_range_multi_line() {
+        colored::control::set_override(false);
+        let source = "line one\nline two\nline three\nline four";
+        let output = SourceHighlighter::display_range(source, 1, 3, 3, 4);
+        // Start, middle, and end lines are all rendered.
+        assert!(output.contains("line one"));
+        assert!(output.contains("line two"));
+        assert!(output.contains("line three"));
+        // Line four is outside the range.
+        assert!(!output.contains("line four"));
+    }
+
+    #[test]
+    fn test_highlight_range_splits_correctly() {
+        colored::control::set_override(false);
+        let result = SourceHighlighter::highlight_range("abcdef", 2, 4);
+        // before = "a", highlighted = "bcd", after = "ef" → concatenated back to original.
+        assert_eq!(result, "abcdef");
+    }
 }
