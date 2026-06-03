@@ -557,6 +557,17 @@ mod tests {
     }
 
     #[test]
+    fn test_fix_content_skips_keyword_fix_when_tokenization_fails() {
+        let d = GenericDialect {};
+        // An unterminated string literal makes the tokenizer fail. Keyword casing
+        // is then left untouched, but the trailing semicolon is still appended.
+        let out = fix_content("select 'unterminated", &d, KeywordCase::Upper).unwrap();
+        assert!(out.contains("select 'unterminated"));
+        assert!(!out.contains("SELECT"));
+        assert!(out.trim_end().ends_with(';'));
+    }
+
+    #[test]
     fn test_fix_content_adds_trailing_semicolon() {
         let d = GenericDialect {};
         let out = fix_content("SELECT 1", &d, KeywordCase::Upper).unwrap();
@@ -576,7 +587,12 @@ mod tests {
         // Regression: a multibyte string literal before a lowercase keyword on the
         // same line used to corrupt the byte offset and panic in replace_range.
         let d = GenericDialect {};
-        let out = fix_content("select '日本語テスト' as label from users", &d).unwrap();
+        let out = fix_content(
+            "select '日本語テスト' as label from users",
+            &d,
+            KeywordCase::Upper,
+        )
+        .unwrap();
         // Keywords are uppercased and the multibyte literal is preserved intact.
         assert!(out.contains("SELECT"));
         assert!(out.contains("FROM"));
