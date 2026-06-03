@@ -1,5 +1,7 @@
 # sqlex
 
+[![codecov](https://codecov.io/gh/atani/sqlex/branch/main/graph/badge.svg)](https://codecov.io/gh/atani/sqlex)
+
 A fast SQL syntax checker and linter written in Rust.
 
 ![Demo](./demo.gif)

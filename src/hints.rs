@@ -159,4 +159,81 @@ WHERE
         let hint = hint.unwrap();
         assert_eq!(hint.suspect_line, Some(4)); // Line with trailing comma before WHERE
     }
+
+    #[test]
+    fn test_no_hint_for_clean_error() {
+        // An "Expected/found" error with no trailing comma anywhere yields no hint.
+        let source = "SELECT id FROM users";
+        let messages = Messages::new("en");
+        let hint = analyze_error("Expected: identifier, found: 123", source, 1, &messages);
+        assert!(hint.is_none());
+    }
+
+    #[test]
+    fn test_no_hint_for_unrelated_message() {
+        // Message that matches none of the patterns.
+        let source = "SELECT 1;";
+        let messages = Messages::new("en");
+        assert!(analyze_error("some random error", source, 1, &messages).is_none());
+    }
+
+    #[test]
+    fn test_mismatched_closing_paren_hint() {
+        let source = "SELECT (a, b FROM t;";
+        let messages = Messages::new("en");
+        let hint = analyze_error("Expected: ), found: FROM", source, 1, &messages);
+        assert!(hint.is_some());
+        let hint = hint.unwrap();
+        assert_eq!(hint.hint, "Check for mismatched parentheses");
+        assert!(hint.suspect_line.is_none());
+    }
+
+    #[test]
+    fn test_missing_opening_paren_hint() {
+        let source = "SELECT count x FROM t;";
+        let messages = Messages::new("en");
+        let hint = analyze_error("Expected: (, found: x", source, 1, &messages);
+        assert!(hint.is_some());
+        assert_eq!(hint.unwrap().hint, "Function call may require parentheses");
+    }
+
+    #[test]
+    fn test_unclosed_parentheses_on_eof() {
+        // Two open parens, zero close → 2 unclosed reported.
+        let source = "SELECT ((a + b FROM t";
+        let messages = Messages::new("en");
+        let hint = analyze_error("Expected expression, found: EOF", source, 1, &messages);
+        assert!(hint.is_some());
+        let hint = hint.unwrap();
+        assert!(hint.hint.contains("2 unclosed"));
+        assert_eq!(hint.suspect_pattern, Some("(".to_string()));
+    }
+
+    #[test]
+    fn test_unclosed_quote_on_eof() {
+        // Balanced parens but an odd number of single quotes.
+        let source = "SELECT 'unterminated FROM t";
+        let messages = Messages::new("en");
+        let hint = analyze_error("Unexpected end of input", source, 1, &messages);
+        assert!(hint.is_some());
+        let hint = hint.unwrap();
+        assert_eq!(hint.hint, "Unclosed quote found");
+        assert_eq!(hint.suspect_pattern, Some("'".to_string()));
+    }
+
+    #[test]
+    fn test_eof_with_balanced_input_no_hint() {
+        // EOF error but parens/quotes are balanced → no hint.
+        let source = "SELECT (a) FROM t";
+        let messages = Messages::new("en");
+        assert!(analyze_error("unexpected EOF here", source, 1, &messages).is_none());
+    }
+
+    #[test]
+    fn test_japanese_hint_output() {
+        let source = "SELECT ((a FROM t";
+        let messages = Messages::new("ja");
+        let hint = analyze_error("found: EOF", source, 1, &messages).unwrap();
+        assert!(hint.hint.contains("不足"));
+    }
 }

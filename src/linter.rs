@@ -406,4 +406,179 @@ mod tests {
         let errors = linter.lint("SELECT * FROM users;", &dialect, &messages);
         assert!(!errors.iter().any(|e| e.rule == "trailing-semicolon"));
     }
+
+    fn upper_only_linter() -> Linter {
+        Linter::new(LintConfig {
+            keyword_case: KeywordCase::Upper,
+            no_select_star: false,
+            require_table_alias: false,
+            trailing_semicolon: false,
+        })
+    }
+
+    #[test]
+    fn test_keyword_case_lower_flags_uppercase() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Lower,
+            no_select_star: false,
+            require_table_alias: false,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+
+        // Uppercase keywords are violations when lower is required.
+        let errors = linter.lint("SELECT id FROM users;", &dialect, &messages);
+        assert!(errors.iter().any(|e| e.rule == "keyword-case"));
+
+        // Already-lowercase keywords pass.
+        let errors = linter.lint("select id from users;", &dialect, &messages);
+        assert!(!errors.iter().any(|e| e.rule == "keyword-case"));
+    }
+
+    #[test]
+    fn test_keyword_case_upper_passes_when_uppercase() {
+        let linter = upper_only_linter();
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        let errors = linter.lint("SELECT id FROM users", &dialect, &messages);
+        assert!(!errors.iter().any(|e| e.rule == "keyword-case"));
+    }
+
+    #[test]
+    fn test_keyword_case_ignore_emits_nothing() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Ignore,
+            no_select_star: false,
+            require_table_alias: false,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        let errors = linter.lint("select ID from Users", &dialect, &messages);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_keyword_case_error_message_carries_expected() {
+        let linter = upper_only_linter();
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        let errors = linter.lint("select 1", &dialect, &messages);
+        let e = errors.iter().find(|e| e.rule == "keyword-case").unwrap();
+        assert!(e.message.contains("SELECT"));
+        assert_eq!(e.severity, Severity::Warning);
+    }
+
+    #[test]
+    fn test_require_table_alias_flags_missing_alias() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Ignore,
+            no_select_star: false,
+            require_table_alias: true,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+
+        // No alias → warning.
+        let errors = linter.lint("SELECT a FROM users;", &dialect, &messages);
+        assert!(errors.iter().any(|e| e.rule == "require-table-alias"));
+
+        // With alias → no warning.
+        let errors = linter.lint("SELECT a FROM users u;", &dialect, &messages);
+        assert!(!errors.iter().any(|e| e.rule == "require-table-alias"));
+    }
+
+    #[test]
+    fn test_require_table_alias_checks_joins() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Ignore,
+            no_select_star: false,
+            require_table_alias: true,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+
+        // Base table aliased, joined table not → exactly one warning.
+        let errors = linter.lint(
+            "SELECT a FROM users u JOIN orders ON u.id = orders.user_id;",
+            &dialect,
+            &messages,
+        );
+        let alias_errors: Vec<_> = errors
+            .iter()
+            .filter(|e| e.rule == "require-table-alias")
+            .collect();
+        assert_eq!(alias_errors.len(), 1);
+        assert!(alias_errors[0].message.contains("orders"));
+    }
+
+    #[test]
+    fn test_qualified_wildcard_flagged() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Ignore,
+            no_select_star: true,
+            require_table_alias: false,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+
+        // `users.*` is a qualified wildcard and must be flagged.
+        let errors = linter.lint("SELECT users.* FROM users;", &dialect, &messages);
+        assert!(errors.iter().any(|e| e.rule == "no-select-star"));
+    }
+
+    #[test]
+    fn test_empty_input_produces_no_keyword_or_star_errors() {
+        let linter = Linter::new(LintConfig::default());
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        // Empty trimmed input → no trailing-semicolon warning either.
+        let errors = linter.lint("   \n  ", &dialect, &messages);
+        assert!(errors.is_empty());
+    }
+
+    #[test]
+    fn test_multiple_rules_combined() {
+        // Default config: upper keywords, no select star, trailing semicolon.
+        let linter = Linter::new(LintConfig::default());
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        let errors = linter.lint("select * from users", &dialect, &messages);
+        assert!(errors.iter().any(|e| e.rule == "keyword-case"));
+        assert!(errors.iter().any(|e| e.rule == "no-select-star"));
+        assert!(errors.iter().any(|e| e.rule == "trailing-semicolon"));
+    }
+
+    #[test]
+    fn test_pos_to_line_col_multiline() {
+        let linter = upper_only_linter();
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        // Keyword "from" is on the second line; its reported line should be 2.
+        let errors = linter.lint("SELECT id\nfrom users", &dialect, &messages);
+        let kw = errors.iter().find(|e| e.rule == "keyword-case").unwrap();
+        assert_eq!(kw.line, 2);
+    }
+
+    #[test]
+    fn test_is_sql_keyword() {
+        assert!(is_sql_keyword("select"));
+        assert!(is_sql_keyword("SELECT"));
+        assert!(is_sql_keyword("Join"));
+        assert!(!is_sql_keyword("users"));
+        assert!(!is_sql_keyword("foobar"));
+    }
+
+    #[test]
+    fn test_lint_config_default() {
+        let cfg = LintConfig::default();
+        assert_eq!(cfg.keyword_case, KeywordCase::Upper);
+        assert!(cfg.no_select_star);
+        assert!(!cfg.require_table_alias);
+        assert!(cfg.trailing_semicolon);
+    }
 }
