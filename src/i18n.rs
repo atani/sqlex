@@ -4,107 +4,126 @@ pub fn is_japanese_locale() -> bool {
     get_locale().map(|l| l.starts_with("ja")).unwrap_or(false)
 }
 
+/// Supported message languages. Any unrecognized code falls back to English.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Lang {
+    En,
+    Ja,
+}
+
+impl Lang {
+    fn from_code(code: &str) -> Self {
+        if code.starts_with("ja") {
+            Lang::Ja
+        } else {
+            Lang::En
+        }
+    }
+}
+
 pub struct Messages {
-    lang: String,
+    lang: Lang,
 }
 
 impl Messages {
     pub fn new(lang: &str) -> Self {
         Self {
-            lang: lang.to_string(),
+            lang: Lang::from_code(lang),
         }
     }
 
     pub fn syntax_error(&self, line: usize, col: usize, msg: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("構文エラー ({}行目, {}列目): {}", line, col, msg),
-            _ => format!("Syntax error (line {}, col {}): {}", line, col, msg),
+        match self.lang {
+            Lang::Ja => format!("構文エラー ({}行目, {}列目): {}", line, col, msg),
+            Lang::En => format!("Syntax error (line {}, col {}): {}", line, col, msg),
         }
     }
 
     pub fn file_ok(&self, path: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("✓ {} - 問題なし", path),
-            _ => format!("✓ {} - OK", path),
+        match self.lang {
+            Lang::Ja => format!("✓ {} - 問題なし", path),
+            Lang::En => format!("✓ {} - OK", path),
         }
     }
 
     pub fn file_error(&self, path: &str, count: usize) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("✗ {} - {}件のエラー", path, count),
-            _ => format!("✗ {} - {} error(s)", path, count),
+        match self.lang {
+            Lang::Ja => format!("✗ {} - {}件のエラー", path, count),
+            Lang::En => format!("✗ {} - {} error(s)", path, count),
         }
     }
 
     pub fn summary(&self, files: usize, errors: usize) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("\n合計: {}ファイル, {}件のエラー", files, errors),
-            _ => format!("\nTotal: {} file(s), {} error(s)", files, errors),
+        match self.lang {
+            Lang::Ja => format!("\n合計: {}ファイル, {}件のエラー", files, errors),
+            Lang::En => format!("\nTotal: {} file(s), {} error(s)", files, errors),
         }
     }
 
     pub fn would_fix(&self, path: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("修正予定: {}", path),
-            _ => format!("Would fix: {}", path),
+        match self.lang {
+            Lang::Ja => format!("修正予定: {}", path),
+            Lang::En => format!("Would fix: {}", path),
         }
     }
 
     pub fn fixed(&self, path: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("修正完了: {}", path),
-            _ => format!("Fixed: {}", path),
+        match self.lang {
+            Lang::Ja => format!("修正完了: {}", path),
+            Lang::En => format!("Fixed: {}", path),
         }
     }
 
     // Lint messages
     pub fn keyword_case_error(&self, actual: &str, expected: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("キーワード '{}' は '{}' であるべきです", actual, expected),
-            _ => format!("Keyword '{}' should be '{}'", actual, expected),
+        match self.lang {
+            Lang::Ja => format!("キーワード '{}' は '{}' であるべきです", actual, expected),
+            Lang::En => format!("Keyword '{}' should be '{}'", actual, expected),
         }
     }
 
     pub fn no_select_star_error(&self) -> String {
-        match self.lang.as_str() {
-            "ja" => "SELECT * の使用は推奨されません。カラムを明示的に指定してください".to_string(),
-            _ => "Avoid SELECT *. Specify columns explicitly".to_string(),
+        match self.lang {
+            Lang::Ja => {
+                "SELECT * の使用は推奨されません。カラムを明示的に指定してください".to_string()
+            }
+            Lang::En => "Avoid SELECT *. Specify columns explicitly".to_string(),
         }
     }
 
     pub fn require_table_alias_error(&self, table: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("テーブル '{}' にはエイリアスを指定してください", table),
-            _ => format!("Table '{}' should have an alias", table),
+        match self.lang {
+            Lang::Ja => format!("テーブル '{}' にはエイリアスを指定してください", table),
+            Lang::En => format!("Table '{}' should have an alias", table),
         }
     }
 
     pub fn trailing_semicolon_error(&self) -> String {
-        match self.lang.as_str() {
-            "ja" => "文末にセミコロンがありません".to_string(),
-            _ => "Missing trailing semicolon".to_string(),
+        match self.lang {
+            Lang::Ja => "文末にセミコロンがありません".to_string(),
+            Lang::En => "Missing trailing semicolon".to_string(),
         }
     }
 
     pub fn lint_warning(&self, rule: &str, line: usize, col: usize, msg: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("  [{}] {}行目:{}列目 - {}", rule, line, col, msg),
-            _ => format!("  [{}] line {}:{} - {}", rule, line, col, msg),
+        match self.lang {
+            Lang::Ja => format!("  [{}] {}行目:{}列目 - {}", rule, line, col, msg),
+            Lang::En => format!("  [{}] line {}:{} - {}", rule, line, col, msg),
         }
     }
 
     pub fn lint_summary(&self, files: usize, warnings: usize) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("\n合計: {}ファイル, {}件の警告", files, warnings),
-            _ => format!("\nTotal: {} file(s), {} warning(s)", files, warnings),
+        match self.lang {
+            Lang::Ja => format!("\n合計: {}ファイル, {}件の警告", files, warnings),
+            Lang::En => format!("\nTotal: {} file(s), {} warning(s)", files, warnings),
         }
     }
 
     // Hint messages
     pub fn hint_trailing_comma(&self, line: usize) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("{}行目の末尾に余計なカンマがある可能性があります", line),
-            _ => format!(
+        match self.lang {
+            Lang::Ja => format!("{}行目の末尾に余計なカンマがある可能性があります", line),
+            Lang::En => format!(
                 "Line {} may have a trailing comma that should be removed",
                 line
             ),
@@ -112,30 +131,30 @@ impl Messages {
     }
 
     pub fn hint_check_parentheses(&self) -> String {
-        match self.lang.as_str() {
-            "ja" => "括弧の対応を確認してください".to_string(),
-            _ => "Check for mismatched parentheses".to_string(),
+        match self.lang {
+            Lang::Ja => "括弧の対応を確認してください".to_string(),
+            Lang::En => "Check for mismatched parentheses".to_string(),
         }
     }
 
     pub fn hint_missing_parentheses(&self) -> String {
-        match self.lang.as_str() {
-            "ja" => "関数呼び出しに括弧が必要かもしれません".to_string(),
-            _ => "Function call may require parentheses".to_string(),
+        match self.lang {
+            Lang::Ja => "関数呼び出しに括弧が必要かもしれません".to_string(),
+            Lang::En => "Function call may require parentheses".to_string(),
         }
     }
 
     pub fn hint_unclosed_parentheses(&self, count: i32) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("閉じ括弧が{}個不足しています", count),
-            _ => format!("{} unclosed parenthesis(es) found", count),
+        match self.lang {
+            Lang::Ja => format!("閉じ括弧が{}個不足しています", count),
+            Lang::En => format!("{} unclosed parenthesis(es) found", count),
         }
     }
 
     pub fn hint_unclosed_quote(&self) -> String {
-        match self.lang.as_str() {
-            "ja" => "閉じられていない引用符があります".to_string(),
-            _ => "Unclosed quote found".to_string(),
+        match self.lang {
+            Lang::Ja => "閉じられていない引用符があります".to_string(),
+            Lang::En => "Unclosed quote found".to_string(),
         }
     }
 }
@@ -156,6 +175,15 @@ mod tests {
         let m = Messages::new("fr");
         assert_eq!(m.file_ok("a.sql"), "✓ a.sql - OK");
         assert_eq!(m.trailing_semicolon_error(), "Missing trailing semicolon");
+    }
+
+    #[test]
+    fn test_japanese_locale_variants_map_to_ja() {
+        // Region-tagged Japanese locales (e.g. "ja-JP") are still Japanese.
+        assert_eq!(
+            Messages::new("ja-JP").file_ok("a.sql"),
+            "✓ a.sql - 問題なし"
+        );
     }
 
     #[test]
