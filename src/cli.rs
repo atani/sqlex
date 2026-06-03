@@ -45,6 +45,10 @@ pub enum Command {
         #[arg(short, long, default_value = "generic")]
         dialect: String,
 
+        /// Keyword case style to apply (upper, lower, ignore)
+        #[arg(long, default_value = "upper")]
+        keyword_case: String,
+
         /// Show what would be changed without modifying files
         #[arg(long)]
         dry_run: bool,
