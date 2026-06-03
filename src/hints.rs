@@ -4,8 +4,6 @@ use crate::i18n::Messages;
 pub struct ErrorHint {
     pub hint: String,
     pub suspect_line: Option<usize>,
-    #[allow(dead_code)]
-    pub suspect_pattern: Option<String>,
 }
 
 /// SQL keywords that typically start a new clause
@@ -54,7 +52,6 @@ pub fn analyze_error(
                         return Some(ErrorHint {
                             hint: messages.hint_trailing_comma(kw_line - 1),
                             suspect_line: Some(kw_line - 1),
-                            suspect_pattern: Some(",".to_string()),
                         });
                     }
                 }
@@ -68,7 +65,6 @@ pub fn analyze_error(
                     return Some(ErrorHint {
                         hint: messages.hint_trailing_comma(error_line - 1),
                         suspect_line: Some(error_line - 1),
-                        suspect_pattern: Some(",".to_string()),
                     });
                 }
             }
@@ -81,7 +77,6 @@ pub fn analyze_error(
         return Some(ErrorHint {
             hint: messages.hint_check_parentheses(),
             suspect_line: None,
-            suspect_pattern: None,
         });
     }
 
@@ -91,7 +86,6 @@ pub fn analyze_error(
         return Some(ErrorHint {
             hint: messages.hint_missing_parentheses(),
             suspect_line: None,
-            suspect_pattern: None,
         });
     }
 
@@ -105,7 +99,6 @@ pub fn analyze_error(
             return Some(ErrorHint {
                 hint: messages.hint_unclosed_parentheses(open_parens - close_parens),
                 suspect_line: None,
-                suspect_pattern: Some("(".to_string()),
             });
         }
 
@@ -115,7 +108,6 @@ pub fn analyze_error(
             return Some(ErrorHint {
                 hint: messages.hint_unclosed_quote(),
                 suspect_line: None,
-                suspect_pattern: Some("'".to_string()),
             });
         }
     }
@@ -206,7 +198,6 @@ WHERE
         assert!(hint.is_some());
         let hint = hint.unwrap();
         assert!(hint.hint.contains("2 unclosed"));
-        assert_eq!(hint.suspect_pattern, Some("(".to_string()));
     }
 
     #[test]
@@ -218,7 +209,6 @@ WHERE
         assert!(hint.is_some());
         let hint = hint.unwrap();
         assert_eq!(hint.hint, "Unclosed quote found");
-        assert_eq!(hint.suspect_pattern, Some("'".to_string()));
     }
 
     #[test]

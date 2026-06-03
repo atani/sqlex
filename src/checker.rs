@@ -56,13 +56,6 @@ fn collect_sql_files(paths: &[String]) -> Vec<String> {
     files
 }
 
-#[allow(dead_code)]
-#[derive(Debug)]
-pub struct CheckResult {
-    pub path: String,
-    pub errors: Vec<SyntaxError>,
-}
-
 #[derive(Debug)]
 pub struct SyntaxError {
     pub line: usize,
@@ -127,7 +120,6 @@ pub fn check(paths: &[String], dialect_name: &str, messages: &Messages) -> Resul
     }
 
     let mut total_errors = 0;
-    let mut results = Vec::new();
 
     for file in &files {
         let content =
@@ -166,11 +158,6 @@ pub fn check(paths: &[String], dialect_name: &str, messages: &Messages) -> Resul
             }
             total_errors += errors.len();
         }
-
-        results.push(CheckResult {
-            path: file.clone(),
-            errors,
-        });
     }
 
     println!("{}", messages.summary(files.len(), total_errors));

@@ -10,16 +10,6 @@ pub struct LintError {
     pub line: usize,
     pub column: usize,
     pub message: String,
-    #[allow(dead_code)]
-    pub severity: Severity,
-}
-
-#[allow(dead_code)]
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Severity {
-    Error,
-    Warning,
-    Info,
 }
 
 #[derive(Debug, Clone)]
@@ -129,7 +119,6 @@ impl Linter {
                     line: (start.line as usize).max(1),
                     column: (start.column as usize).max(1),
                     message: messages.keyword_case_error(&word.value, &expected),
-                    severity: Severity::Warning,
                 });
             }
         }
@@ -154,7 +143,6 @@ impl Linter {
                             line,
                             column,
                             message: messages.no_select_star_error(),
-                            severity: Severity::Warning,
                         });
                     }
                 }
@@ -204,7 +192,6 @@ impl Linter {
                     line,
                     column,
                     message: messages.require_table_alias_error(&name.to_string()),
-                    severity: Severity::Warning,
                 });
             }
         }
@@ -219,7 +206,6 @@ impl Linter {
                 line: lines.len(),
                 column: lines.last().map(|l| l.len()).unwrap_or(1),
                 message: messages.trailing_semicolon_error(),
-                severity: Severity::Warning,
             }]
         } else {
             vec![]
@@ -450,7 +436,6 @@ mod tests {
         let errors = linter.lint("select 1", &dialect, &messages);
         let e = errors.iter().find(|e| e.rule == "keyword-case").unwrap();
         assert!(e.message.contains("SELECT"));
-        assert_eq!(e.severity, Severity::Warning);
     }
 
     #[test]
