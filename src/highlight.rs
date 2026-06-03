@@ -80,75 +80,12 @@ impl SourceHighlighter {
         output.join("\n")
     }
 
-    /// Display source code with highlighted error location (backward compatible)
-    #[allow(dead_code)]
-    pub fn display_error(source: &str, line: usize, column: usize, context_lines: usize) -> String {
-        Self::display_error_with_hint(source, line, column, None, context_lines)
-    }
-
     /// Create indicator line with caret pointing to error column
     fn make_indicator(column: usize, line_len: usize) -> String {
         let col = column.saturating_sub(1).min(line_len);
         let mut indicator = " ".repeat(col);
         indicator.push('^');
         indicator
-    }
-
-    /// Display multiple lines with optional range highlighting
-    #[allow(dead_code)]
-    pub fn display_range(
-        source: &str,
-        start_line: usize,
-        end_line: usize,
-        start_col: usize,
-        end_col: usize,
-    ) -> String {
-        let lines: Vec<&str> = source.lines().collect();
-        let mut output = Vec::new();
-
-        let line_num_width = end_line.to_string().len();
-
-        for (idx, line_content) in lines.iter().enumerate() {
-            let line_num = idx + 1;
-            if line_num < start_line || line_num > end_line {
-                continue;
-            }
-
-            let line_num_str = format!("{:>width$}", line_num, width = line_num_width);
-
-            // Highlight the range
-            let highlighted = if line_num == start_line && line_num == end_line {
-                // Single line range
-                Self::highlight_range(line_content, start_col, end_col)
-            } else if line_num == start_line {
-                Self::highlight_range(line_content, start_col, line_content.len())
-            } else if line_num == end_line {
-                Self::highlight_range(line_content, 1, end_col)
-            } else {
-                line_content.yellow().to_string()
-            };
-
-            output.push(format!(
-                "{} {} {}",
-                line_num_str.cyan(),
-                "|".dimmed(),
-                highlighted
-            ));
-        }
-
-        output.join("\n")
-    }
-
-    fn highlight_range(line: &str, start_col: usize, end_col: usize) -> String {
-        let start = start_col.saturating_sub(1);
-        let end = end_col.min(line.len());
-
-        let chars: Vec<char> = line.chars().collect();
-        let before: String = chars.iter().take(start).collect();
-        let highlight: String = chars.iter().skip(start).take(end - start).collect();
-        let after: String = chars.iter().skip(end).collect();
-
-        format!("{}{}{}", before, highlight.red().underline(), after)
     }
 }
 
@@ -157,9 +94,9 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_display_error() {
+    fn test_display_error_with_hint_basic() {
         let source = "SELECT id\nFROM users\nWHERE active =";
-        let output = SourceHighlighter::display_error(source, 3, 15, 1);
+        let output = SourceHighlighter::display_error_with_hint(source, 3, 15, None, 1);
         assert!(output.contains("WHERE active ="));
     }
 
@@ -186,7 +123,7 @@ mod tests {
     fn test_display_error_renders_caret_and_context() {
         colored::control::set_override(false);
         let source = "SELECT id\nFROM users\nWHERE active =";
-        let output = SourceHighlighter::display_error(source, 3, 1, 2);
+        let output = SourceHighlighter::display_error_with_hint(source, 3, 1, None, 2);
         // Error line and surrounding context lines are shown.
         assert!(output.contains("SELECT id"));
         assert!(output.contains("FROM users"));
@@ -217,35 +154,5 @@ mod tests {
         let output = SourceHighlighter::display_error_with_hint(source, 1, 1, Some(6), 1);
         assert!(output.contains("← ここを確認"));
         assert!(output.contains("e,"));
-    }
-
-    #[test]
-    fn test_display_range_single_line() {
-        colored::control::set_override(false);
-        let source = "SELECT abcdef FROM t";
-        let output = SourceHighlighter::display_range(source, 1, 1, 8, 13);
-        assert!(output.contains("SELECT"));
-        assert!(output.contains("abcde"));
-    }
-
-    #[test]
-    fn test_display_range_multi_line() {
-        colored::control::set_override(false);
-        let source = "line one\nline two\nline three\nline four";
-        let output = SourceHighlighter::display_range(source, 1, 3, 3, 4);
-        // Start, middle, and end lines are all rendered.
-        assert!(output.contains("line one"));
-        assert!(output.contains("line two"));
-        assert!(output.contains("line three"));
-        // Line four is outside the range.
-        assert!(!output.contains("line four"));
-    }
-
-    #[test]
-    fn test_highlight_range_splits_correctly() {
-        colored::control::set_override(false);
-        let result = SourceHighlighter::highlight_range("abcdef", 2, 4);
-        // before = "a", highlighted = "bcd", after = "ef" → concatenated back to original.
-        assert_eq!(result, "abcdef");
     }
 }
