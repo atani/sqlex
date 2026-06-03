@@ -94,48 +94,43 @@ impl Linter {
         let mut errors = Vec::new();
         let mut tokenizer = Tokenizer::new(dialect, sql);
 
-        if let Ok(tokens) = tokenizer.tokenize() {
-            let mut pos = 0;
-
-            for token in tokens {
-                let token_str = token.to_string();
-                let token_len = token_str.len();
-
-                // Calculate line and column
-                let (line, column) = self.pos_to_line_col(sql, pos);
-
-                if let Token::Word(word) = &token {
-                    if is_sql_keyword(&word.value) {
-                        let is_upper = word.value.chars().all(|c| c.is_uppercase());
-                        let is_lower = word.value.chars().all(|c| c.is_lowercase());
-
-                        let violation = match self.config.keyword_case {
-                            KeywordCase::Upper => !is_upper,
-                            KeywordCase::Lower => !is_lower,
-                            KeywordCase::Ignore => false,
-                        };
-
-                        if violation {
-                            let expected = match self.config.keyword_case {
-                                KeywordCase::Upper => word.value.to_uppercase(),
-                                KeywordCase::Lower => word.value.to_lowercase(),
-                                KeywordCase::Ignore => word.value.clone(),
-                            };
-                            errors.push(LintError {
-                                rule: "keyword-case".to_string(),
-                                line,
-                                column,
-                                message: messages.keyword_case_error(&word.value, &expected),
-                                severity: Severity::Warning,
-                            });
-                        }
-                    }
+        // Tokenize with location so each keyword carries an exact (line, column),
+        // matching the fix command and avoiding the previous approximate scan.
+        if let Ok(tokens) = tokenizer.tokenize_with_location() {
+            for token_with_span in tokens {
+                let Token::Word(word) = &token_with_span.token else {
+                    continue;
+                };
+                // Quoted identifiers that happen to match a keyword are not keywords.
+                if word.quote_style.is_some() || !is_sql_keyword(&word.value) {
+                    continue;
                 }
 
-                // Advance position (approximate - tokens may have whitespace between)
-                if let Some(idx) = sql[pos..].find(&token_str) {
-                    pos += idx + token_len;
+                // This method is only invoked for Upper/Lower (the caller skips
+                // Ignore), so treat anything that is not Upper as Lower.
+                let want_upper = self.config.keyword_case == KeywordCase::Upper;
+                let conforms = if want_upper {
+                    word.value.chars().all(|c| c.is_uppercase())
+                } else {
+                    word.value.chars().all(|c| c.is_lowercase())
+                };
+                if conforms {
+                    continue;
                 }
+
+                let expected = if want_upper {
+                    word.value.to_uppercase()
+                } else {
+                    word.value.to_lowercase()
+                };
+                let start = token_with_span.span.start;
+                errors.push(LintError {
+                    rule: "keyword-case".to_string(),
+                    line: (start.line as usize).max(1),
+                    column: (start.column as usize).max(1),
+                    message: messages.keyword_case_error(&word.value, &expected),
+                    severity: Severity::Warning,
+                });
             }
         }
 
@@ -235,23 +230,6 @@ impl Linter {
         } else {
             vec![]
         }
-    }
-
-    fn pos_to_line_col(&self, sql: &str, pos: usize) -> (usize, usize) {
-        let mut line = 1;
-        let mut col = 1;
-        for (i, c) in sql.chars().enumerate() {
-            if i >= pos {
-                break;
-            }
-            if c == '\n' {
-                line += 1;
-                col = 1;
-            } else {
-                col += 1;
-            }
-        }
-        (line, col)
     }
 }
 
@@ -554,14 +532,24 @@ mod tests {
     }
 
     #[test]
-    fn test_pos_to_line_col_multiline() {
+    fn test_keyword_case_reports_accurate_line_and_column() {
         let linter = upper_only_linter();
         let messages = Messages::new("en");
         let dialect = GenericDialect {};
-        // Keyword "from" is on the second line; its reported line should be 2.
+        // Keyword "from" is on line 2, column 1 (token spans are exact now).
         let errors = linter.lint("SELECT id\nfrom users", &dialect, &messages);
         let kw = errors.iter().find(|e| e.rule == "keyword-case").unwrap();
-        assert_eq!(kw.line, 2);
+        assert_eq!((kw.line, kw.column), (2, 1));
+    }
+
+    #[test]
+    fn test_keyword_case_ignores_quoted_identifiers() {
+        let linter = upper_only_linter();
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+        // A double-quoted identifier matching a keyword must not be flagged.
+        let errors = linter.lint("SELECT \"select\" FROM t", &dialect, &messages);
+        assert!(!errors.iter().any(|e| e.rule == "keyword-case"));
     }
 
     #[test]
