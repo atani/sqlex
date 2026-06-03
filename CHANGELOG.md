@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.4.0](https://github.com/atani/sqlex/compare/v0.3.1...v0.4.0) (2026-06-03)
+
+
+### Features
+
+* add --keyword-case option to fix command ([#47](https://github.com/atani/sqlex/issues/47)) ([a3e8703](https://github.com/atani/sqlex/commit/a3e87030270cf9dcebc405b32f4625f852cdea53))
+
+
+### Bug Fixes
+
+* prevent panic in fix command on multibyte SQL content ([#45](https://github.com/atani/sqlex/issues/45)) ([9fb9bd4](https://github.com/atani/sqlex/commit/9fb9bd46cabdcd3913b33dfce83e69eb8b192b29))
+* report accurate line and column for lint rules ([#46](https://github.com/atani/sqlex/issues/46)) ([f6d4092](https://github.com/atani/sqlex/commit/f6d40927c8f1d5570abc9112e49ea38901e32534))
+
 ## [0.3.1](https://github.com/atani/sqlex/compare/v0.3.0...v0.3.1) (2026-02-26)
 
 
