@@ -15,14 +15,6 @@ impl Messages {
         }
     }
 
-    #[allow(dead_code)]
-    pub fn checking_file(&self, path: &str) -> String {
-        match self.lang.as_str() {
-            "ja" => format!("チェック中: {}", path),
-            _ => format!("Checking: {}", path),
-        }
-    }
-
     pub fn syntax_error(&self, line: usize, col: usize, msg: &str) -> String {
         match self.lang.as_str() {
             "ja" => format!("構文エラー ({}行目, {}列目): {}", line, col, msg),
@@ -164,18 +156,6 @@ mod tests {
         let m = Messages::new("fr");
         assert_eq!(m.file_ok("a.sql"), "✓ a.sql - OK");
         assert_eq!(m.trailing_semicolon_error(), "Missing trailing semicolon");
-    }
-
-    #[test]
-    fn test_checking_file() {
-        assert_eq!(
-            Messages::new("en").checking_file("a.sql"),
-            "Checking: a.sql"
-        );
-        assert_eq!(
-            Messages::new("ja").checking_file("a.sql"),
-            "チェック中: a.sql"
-        );
     }
 
     #[test]
