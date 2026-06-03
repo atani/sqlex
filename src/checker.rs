@@ -228,15 +228,25 @@ fn build_line_offsets(src: &str) -> Vec<usize> {
     offsets
 }
 
-fn location_to_byte_offset(line_offsets: &[usize], line: u64, column: u64) -> usize {
+fn location_to_byte_offset(src: &str, line_offsets: &[usize], line: u64, column: u64) -> usize {
     let line_idx = (line as usize).saturating_sub(1);
+    // sqlparser's Location::column counts characters (1-based), not bytes. Adding it
+    // directly to a byte offset corrupts the position whenever a line contains
+    // multibyte characters before the token, which can land mid-codepoint and panic
+    // when used to slice the string. Walk `col_offset` characters from the line start
+    // to get the correct byte offset instead.
     let col_offset = (column as usize).saturating_sub(1);
-    if line_idx < line_offsets.len() {
-        line_offsets[line_idx] + col_offset
-    } else {
+    let Some(&line_start) = line_offsets.get(line_idx) else {
         // Fallback: end of string
-        line_offsets.last().copied().unwrap_or(0)
-    }
+        return line_offsets.last().copied().unwrap_or(0);
+    };
+    let tail = &src[line_start..];
+    let byte_in_line = tail
+        .char_indices()
+        .nth(col_offset)
+        .map(|(byte, _)| byte)
+        .unwrap_or(tail.len());
+    line_start + byte_in_line
 }
 
 /// Fix SQL content using token-based partial replacement.
@@ -259,6 +269,7 @@ fn fix_content(content: &str, dialect: &dyn Dialect) -> Result<String> {
                         let upper = word.value.to_uppercase();
                         if word.value != upper {
                             let offset = location_to_byte_offset(
+                                content,
                                 &line_offsets,
                                 token_with_span.span.start.line,
                                 token_with_span.span.start.column,
@@ -476,18 +487,29 @@ mod tests {
 
     #[test]
     fn test_location_to_byte_offset() {
-        let offsets = build_line_offsets("abc\ndef");
+        let src = "abc\ndef";
+        let offsets = build_line_offsets(src);
         // Line 2, column 1 → byte offset 4 (start of "def").
-        assert_eq!(location_to_byte_offset(&offsets, 2, 1), 4);
+        assert_eq!(location_to_byte_offset(src, &offsets, 2, 1), 4);
         // Line 1, column 3 → byte offset 2.
-        assert_eq!(location_to_byte_offset(&offsets, 1, 3), 2);
+        assert_eq!(location_to_byte_offset(src, &offsets, 1, 3), 2);
     }
 
     #[test]
     fn test_location_to_byte_offset_out_of_range_falls_back() {
-        let offsets = build_line_offsets("abc");
+        let src = "abc";
+        let offsets = build_line_offsets(src);
         // Line beyond the input → falls back to last known offset.
-        assert_eq!(location_to_byte_offset(&offsets, 99, 1), 0);
+        assert_eq!(location_to_byte_offset(src, &offsets, 99, 1), 0);
+    }
+
+    #[test]
+    fn test_location_to_byte_offset_multibyte_column_is_char_based() {
+        // "日本" is 6 bytes / 2 chars. The keyword starting at column 4 (the 4th
+        // character) must map to byte offset 7 (after "日本 "), not byte 3.
+        let src = "日本 from t";
+        let offsets = build_line_offsets(src);
+        assert_eq!(location_to_byte_offset(src, &offsets, 1, 4), 7);
     }
 
     #[test]
@@ -514,6 +536,19 @@ mod tests {
         let out = fix_content("SELECT 1;\n", &d).unwrap();
         // Already terminated → no extra semicolon appended.
         assert_eq!(out.matches(';').count(), 1);
+    }
+
+    #[test]
+    fn test_fix_content_handles_multibyte_before_keyword() {
+        // Regression: a multibyte string literal before a lowercase keyword on the
+        // same line used to corrupt the byte offset and panic in replace_range.
+        let d = GenericDialect {};
+        let out = fix_content("select '日本語テスト' as label from users", &d).unwrap();
+        // Keywords are uppercased and the multibyte literal is preserved intact.
+        assert!(out.contains("SELECT"));
+        assert!(out.contains("FROM"));
+        assert!(out.contains("'日本語テスト'"));
+        assert!(out.trim_end().ends_with(';'));
     }
 
     #[test]
