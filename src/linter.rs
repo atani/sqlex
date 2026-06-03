@@ -1,8 +1,8 @@
 use crate::i18n::Messages;
-use sqlparser::ast::{SelectItem, SetExpr, Statement, TableFactor, TableWithJoins};
+use sqlparser::ast::{SelectItem, SetExpr, Spanned, Statement, TableFactor, TableWithJoins};
 use sqlparser::dialect::Dialect;
 use sqlparser::parser::Parser;
-use sqlparser::tokenizer::{Token, Tokenizer};
+use sqlparser::tokenizer::{Span, Token, Tokenizer};
 
 #[derive(Debug, Clone)]
 pub struct LintError {
@@ -143,21 +143,16 @@ impl Linter {
         if let Statement::Query(query) = stmt {
             if let SetExpr::Select(select) = query.body.as_ref() {
                 for item in &select.projection {
-                    if matches!(item, SelectItem::Wildcard(_)) {
+                    // Both `SELECT *` and `SELECT table.*` are flagged.
+                    if matches!(
+                        item,
+                        SelectItem::Wildcard(_) | SelectItem::QualifiedWildcard(_, _)
+                    ) {
+                        let (line, column) = span_start(&item.span());
                         errors.push(LintError {
                             rule: "no-select-star".to_string(),
-                            line: 1,
-                            column: 1,
-                            message: messages.no_select_star_error(),
-                            severity: Severity::Warning,
-                        });
-                    }
-                    // Check for table.* pattern
-                    if let SelectItem::QualifiedWildcard(_, _) = item {
-                        errors.push(LintError {
-                            rule: "no-select-star".to_string(),
-                            line: 1,
-                            column: 1,
+                            line,
+                            column,
                             message: messages.no_select_star_error(),
                             severity: Severity::Warning,
                         });
@@ -189,29 +184,28 @@ impl Linter {
         errors: &mut Vec<LintError>,
         messages: &Messages,
     ) {
-        if let TableFactor::Table { name, alias, .. } = &table.relation {
+        self.check_table_factor(&table.relation, errors, messages);
+        for join in &table.joins {
+            self.check_table_factor(&join.relation, errors, messages);
+        }
+    }
+
+    fn check_table_factor(
+        &self,
+        relation: &TableFactor,
+        errors: &mut Vec<LintError>,
+        messages: &Messages,
+    ) {
+        if let TableFactor::Table { name, alias, .. } = relation {
             if alias.is_none() {
+                let (line, column) = span_start(&relation.span());
                 errors.push(LintError {
                     rule: "require-table-alias".to_string(),
-                    line: 1,
-                    column: 1,
+                    line,
+                    column,
                     message: messages.require_table_alias_error(&name.to_string()),
                     severity: Severity::Warning,
                 });
-            }
-        }
-
-        for join in &table.joins {
-            if let TableFactor::Table { name, alias, .. } = &join.relation {
-                if alias.is_none() {
-                    errors.push(LintError {
-                        rule: "require-table-alias".to_string(),
-                        line: 1,
-                        column: 1,
-                        message: messages.require_table_alias_error(&name.to_string()),
-                        severity: Severity::Warning,
-                    });
-                }
             }
         }
     }
@@ -231,6 +225,17 @@ impl Linter {
             vec![]
         }
     }
+}
+
+/// Convert the start of an AST node's [`Span`] into a 1-based (line, column) pair.
+///
+/// sqlparser reports an empty span as `Location { line: 0, column: 0 }` when it
+/// cannot determine a location; fall back to (1, 1) so reported positions stay
+/// 1-based and never point at a nonexistent line.
+fn span_start(span: &Span) -> (usize, usize) {
+    let line = span.start.line.max(1) as usize;
+    let column = span.start.column.max(1) as usize;
+    (line, column)
 }
 
 pub fn is_sql_keyword(word: &str) -> bool {
@@ -507,6 +512,43 @@ mod tests {
         // `users.*` is a qualified wildcard and must be flagged.
         let errors = linter.lint("SELECT users.* FROM users;", &dialect, &messages);
         assert!(errors.iter().any(|e| e.rule == "no-select-star"));
+    }
+
+    #[test]
+    fn test_no_select_star_reports_accurate_location() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Ignore,
+            no_select_star: true,
+            require_table_alias: false,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+
+        // The `*` sits on line 2, column 3 — not the hardcoded (1, 1).
+        let errors = linter.lint("SELECT\n  * FROM users;", &dialect, &messages);
+        let e = errors.iter().find(|e| e.rule == "no-select-star").unwrap();
+        assert_eq!((e.line, e.column), (2, 3));
+    }
+
+    #[test]
+    fn test_require_table_alias_reports_accurate_location() {
+        let linter = Linter::new(LintConfig {
+            keyword_case: KeywordCase::Ignore,
+            no_select_star: false,
+            require_table_alias: true,
+            trailing_semicolon: false,
+        });
+        let messages = Messages::new("en");
+        let dialect = GenericDialect {};
+
+        // `users` (no alias) starts on line 2, column 6.
+        let errors = linter.lint("SELECT a\nFROM users;", &dialect, &messages);
+        let e = errors
+            .iter()
+            .find(|e| e.rule == "require-table-alias")
+            .unwrap();
+        assert_eq!((e.line, e.column), (2, 6));
     }
 
     #[test]
