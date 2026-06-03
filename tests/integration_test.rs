@@ -247,6 +247,26 @@ mod fix_command {
     }
 
     #[test]
+    fn test_fix_keyword_case_lower() {
+        let dir = TempDir::new().unwrap();
+        let path = create_temp_sql(&dir, "upper.sql", "SELECT ID FROM USERS;");
+
+        let output = sqlex()
+            .args(["fix", "--keyword-case", "lower", &path])
+            .output()
+            .expect("Failed to execute");
+
+        assert!(output.status.success());
+
+        let actual = fs::read_to_string(&path).unwrap();
+        // Keywords are lowercased; identifiers keep their original casing.
+        assert!(actual.contains("select"));
+        assert!(actual.contains("from"));
+        assert!(actual.contains("ID"));
+        assert!(actual.contains("USERS"));
+    }
+
+    #[test]
     fn test_fix_dry_run_diff_format() {
         let dir = TempDir::new().unwrap();
         let content = "select  id  from  users";

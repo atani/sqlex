@@ -27,6 +27,15 @@ fn get_dialect(name: &str) -> Result<Box<dyn Dialect>> {
     }
 }
 
+fn parse_keyword_case(name: &str) -> KeywordCase {
+    match name.to_lowercase().as_str() {
+        "lower" => KeywordCase::Lower,
+        "ignore" => KeywordCase::Ignore,
+        // "upper" and any unrecognized value default to upper.
+        _ => KeywordCase::Upper,
+    }
+}
+
 fn collect_sql_files(paths: &[String]) -> Vec<String> {
     let mut files = Vec::new();
 
@@ -176,11 +185,13 @@ pub fn check(paths: &[String], dialect_name: &str, messages: &Messages) -> Resul
 pub fn fix(
     paths: &[String],
     dialect_name: &str,
+    keyword_case: &str,
     dry_run: bool,
     format: FixFormat,
     messages: &Messages,
 ) -> Result<()> {
     let dialect = get_dialect(dialect_name)?;
+    let kw_case = parse_keyword_case(keyword_case);
     let files = collect_sql_files(paths);
 
     if files.is_empty() {
@@ -192,7 +203,7 @@ pub fn fix(
         let content =
             fs::read_to_string(file).with_context(|| format!("Failed to read: {}", file))?;
 
-        let new_content = fix_content(&content, dialect.as_ref())?;
+        let new_content = fix_content(&content, dialect.as_ref(), kw_case)?;
 
         if new_content != content {
             if dry_run {
@@ -251,44 +262,51 @@ fn location_to_byte_offset(src: &str, line_offsets: &[usize], line: u64, column:
 
 /// Fix SQL content using token-based partial replacement.
 /// Only modifies keyword case and trailing semicolons, preserving all original formatting.
-fn fix_content(content: &str, dialect: &dyn Dialect) -> Result<String> {
+fn fix_content(content: &str, dialect: &dyn Dialect, keyword_case: KeywordCase) -> Result<String> {
     let mut result = content.to_string();
 
-    // 1. Fix keyword case using tokenizer (preserves original whitespace/indentation)
-    let mut tokenizer = Tokenizer::new(dialect, content);
-    match tokenizer.tokenize_with_location() {
-        Ok(tokens) => {
-            let line_offsets = build_line_offsets(content);
+    // 1. Fix keyword case using tokenizer (preserves original whitespace/indentation).
+    // KeywordCase::Ignore leaves keyword casing untouched.
+    if keyword_case != KeywordCase::Ignore {
+        let mut tokenizer = Tokenizer::new(dialect, content);
+        match tokenizer.tokenize_with_location() {
+            Ok(tokens) => {
+                let line_offsets = build_line_offsets(content);
 
-            // Collect replacements: (byte_offset, original_len, replacement)
-            let mut replacements: Vec<(usize, usize, String)> = Vec::new();
+                // Collect replacements: (byte_offset, original_len, replacement)
+                let mut replacements: Vec<(usize, usize, String)> = Vec::new();
 
-            for token_with_span in &tokens {
-                if let Token::Word(word) = &token_with_span.token {
-                    if word.quote_style.is_none() && is_sql_keyword(&word.value) {
-                        let upper = word.value.to_uppercase();
-                        if word.value != upper {
-                            let offset = location_to_byte_offset(
-                                content,
-                                &line_offsets,
-                                token_with_span.span.start.line,
-                                token_with_span.span.start.column,
-                            );
-                            replacements.push((offset, word.value.len(), upper));
+                for token_with_span in &tokens {
+                    if let Token::Word(word) = &token_with_span.token {
+                        if word.quote_style.is_none() && is_sql_keyword(&word.value) {
+                            let target = match keyword_case {
+                                KeywordCase::Lower => word.value.to_lowercase(),
+                                // Upper is the default; Ignore is handled above.
+                                _ => word.value.to_uppercase(),
+                            };
+                            if word.value != target {
+                                let offset = location_to_byte_offset(
+                                    content,
+                                    &line_offsets,
+                                    token_with_span.span.start.line,
+                                    token_with_span.span.start.column,
+                                );
+                                replacements.push((offset, word.value.len(), target));
+                            }
                         }
                     }
                 }
-            }
 
-            // Apply replacements in reverse order to preserve byte offsets
-            for (offset, len, replacement) in replacements.into_iter().rev() {
-                if offset + len <= result.len() {
-                    result.replace_range(offset..offset + len, &replacement);
+                // Apply replacements in reverse order to preserve byte offsets
+                for (offset, len, replacement) in replacements.into_iter().rev() {
+                    if offset + len <= result.len() {
+                        result.replace_range(offset..offset + len, &replacement);
+                    }
                 }
             }
-        }
-        Err(_) => {
-            // Tokenization failed; skip keyword fix for this file
+            Err(_) => {
+                // Tokenization failed; skip keyword fix for this file
+            }
         }
     }
 
@@ -360,12 +378,7 @@ pub fn lint(
         return Ok(());
     }
 
-    let kw_case = match keyword_case.to_lowercase().as_str() {
-        "upper" => KeywordCase::Upper,
-        "lower" => KeywordCase::Lower,
-        "ignore" => KeywordCase::Ignore,
-        _ => KeywordCase::Upper,
-    };
+    let kw_case = parse_keyword_case(keyword_case);
 
     let config = LintConfig {
         keyword_case: kw_case,
@@ -515,7 +528,7 @@ mod tests {
     #[test]
     fn test_fix_content_uppercases_keywords() {
         let d = GenericDialect {};
-        let out = fix_content("select id from users;", &d).unwrap();
+        let out = fix_content("select id from users;", &d, KeywordCase::Upper).unwrap();
         assert!(out.contains("SELECT"));
         assert!(out.contains("FROM"));
         // Identifiers are preserved as-is.
@@ -524,16 +537,47 @@ mod tests {
     }
 
     #[test]
+    fn test_fix_content_lowercases_keywords() {
+        let d = GenericDialect {};
+        let out = fix_content("SELECT ID FROM USERS;", &d, KeywordCase::Lower).unwrap();
+        assert!(out.contains("select"));
+        assert!(out.contains("from"));
+        // Identifiers (non-keywords) keep their original casing.
+        assert!(out.contains("ID"));
+        assert!(out.contains("USERS"));
+    }
+
+    #[test]
+    fn test_fix_content_ignore_leaves_keyword_case_untouched() {
+        let d = GenericDialect {};
+        // Ignore must not change casing, but still appends the trailing semicolon.
+        let out = fix_content("select Id from Users", &d, KeywordCase::Ignore).unwrap();
+        assert!(out.contains("select Id from Users"));
+        assert!(out.trim_end().ends_with(';'));
+    }
+
+    #[test]
+    fn test_fix_content_skips_keyword_fix_when_tokenization_fails() {
+        let d = GenericDialect {};
+        // An unterminated string literal makes the tokenizer fail. Keyword casing
+        // is then left untouched, but the trailing semicolon is still appended.
+        let out = fix_content("select 'unterminated", &d, KeywordCase::Upper).unwrap();
+        assert!(out.contains("select 'unterminated"));
+        assert!(!out.contains("SELECT"));
+        assert!(out.trim_end().ends_with(';'));
+    }
+
+    #[test]
     fn test_fix_content_adds_trailing_semicolon() {
         let d = GenericDialect {};
-        let out = fix_content("SELECT 1", &d).unwrap();
+        let out = fix_content("SELECT 1", &d, KeywordCase::Upper).unwrap();
         assert!(out.trim_end().ends_with(';'));
     }
 
     #[test]
     fn test_fix_content_preserves_existing_semicolon() {
         let d = GenericDialect {};
-        let out = fix_content("SELECT 1;\n", &d).unwrap();
+        let out = fix_content("SELECT 1;\n", &d, KeywordCase::Upper).unwrap();
         // Already terminated → no extra semicolon appended.
         assert_eq!(out.matches(';').count(), 1);
     }
@@ -543,7 +587,12 @@ mod tests {
         // Regression: a multibyte string literal before a lowercase keyword on the
         // same line used to corrupt the byte offset and panic in replace_range.
         let d = GenericDialect {};
-        let out = fix_content("select '日本語テスト' as label from users", &d).unwrap();
+        let out = fix_content(
+            "select '日本語テスト' as label from users",
+            &d,
+            KeywordCase::Upper,
+        )
+        .unwrap();
         // Keywords are uppercased and the multibyte literal is preserved intact.
         assert!(out.contains("SELECT"));
         assert!(out.contains("FROM"));
@@ -555,7 +604,7 @@ mod tests {
     fn test_fix_content_preserves_whitespace_and_quoted_identifiers() {
         let d = GenericDialect {};
         // Double whitespace between tokens must be preserved (token-based replacement).
-        let out = fix_content("select  id  from  users;", &d).unwrap();
+        let out = fix_content("select  id  from  users;", &d, KeywordCase::Upper).unwrap();
         assert!(out.contains("SELECT  id  FROM  users"));
     }
 

@@ -71,6 +71,12 @@ sqlex fix --dry-run -f diff query.sql
 
 # Apply fixes
 sqlex fix query.sql
+
+# Lowercase keywords instead of the default uppercase
+sqlex fix --keyword-case lower query.sql
+
+# Keep keyword casing as-is (only normalize the trailing semicolon)
+sqlex fix --keyword-case ignore query.sql
 ```
 
 ### Language Options

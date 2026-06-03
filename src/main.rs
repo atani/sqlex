@@ -30,10 +30,11 @@ fn main() -> Result<()> {
         Command::Fix {
             paths,
             dialect,
+            keyword_case,
             dry_run,
             format,
         } => {
-            checker::fix(&paths, &dialect, dry_run, format, &messages)?;
+            checker::fix(&paths, &dialect, &keyword_case, dry_run, format, &messages)?;
         }
         Command::Lint {
             paths,
