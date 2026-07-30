@@ -18,7 +18,7 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
         rust: [stable]
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -43,7 +43,7 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -61,7 +61,7 @@ jobs:
     name: Coverage
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
@@ -70,7 +70,7 @@ jobs:
           components: llvm-tools-preview
 
       - name: Install cargo-llvm-cov
-        uses: taiki-e/install-action@ed67fa35ac944f3a9b33f12c4dd43b6f31a47e20 # v2.83.3
+        uses: taiki-e/install-action@7572810d7dd469b651bb7793945692cf78da5dd7 # v2.85.0
         with:
           tool: cargo-llvm-cov
 
@@ -99,7 +99,7 @@ jobs:
           - os: windows-latest
             target: x86_64-pc-windows-msvc
     steps:
-      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Rust
         uses: dtolnay/rust-toolchain@master
